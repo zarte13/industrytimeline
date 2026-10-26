@@ -1,0 +1,5 @@
+# Fichiers de travail (archives envoyées, définitions copiées)
+.build/
+
+# Fichiers générés par Teal
+*.lua.bak

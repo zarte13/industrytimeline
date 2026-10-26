@@ -1,0 +1,8 @@
+{
+    "modId": "phil_chronicles",
+    "revision": 1,
+    "severityAdd": "None",
+    "severityRemove": "None",
+    "cosmetic": false,
+    "preRunScript": { "fileName": "phil_chronicles::/mod.script@preRunFn" }
+}
