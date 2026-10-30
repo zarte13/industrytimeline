@@ -26,4 +26,5 @@ https://claude.ai/artifact/63oDXrhzXPQpcaojUMXdo8.
 
 - Textes, commentaires et commits en français ; noms de fichiers et de modules en anglais.
 - Rien ne part au staging tant que `lua tests/run.lua` n'est pas vert.
-- Le cœur reste compatible Lua 5.4 (le jeu), même si les tests tournent en Lua 5.5.
+- Tout le Lua du mod reste compatible Lua 5.2 (version du jeu) : pas de `//` ni d'opérateurs
+  binaires, nombres en double. Les tests tournent en Lua 5.5 et vérifient cette règle.

@@ -1,26 +1,23 @@
--- Générateur pseudo-aléatoire déterministe. L'état est un simple entier (32 bits),
+-- Générateur pseudo-aléatoire déterministe. L'état est un simple entier dans [1, 2^31 - 2],
 -- stocké tel quel dans state.rng : aucune table, aucune fonction dans la sauvegarde.
+-- Le jeu tourne en Lua 5.2 : pas d'opérateurs binaires et des nombres flottants. D'où le
+-- générateur de Park et Miller, dont les produits (< 2^46) restent exacts en double.
 local M = {}
 
-local MASK = 0xFFFFFFFF
+local MODULUS = 2147483647 -- 2^31 - 1
+local MULTIPLIER = 48271
 
--- Avance l'état (congruentiel linéaire 32 bits).
-local function avance(state)
-	return (math.floor(state) * 1664525 + 1013904223) & MASK
-end
-
--- Mélange les bits de l'état pour la sortie (les bas bits d'un LCG sont faibles).
-local function brasse(s)
-	local h = s ~ (s >> 15)
-	h = (h * 2246822519) & MASK
-	h = h ~ (h >> 13)
-	return h
+-- Ramène n'importe quelle graine dans [1, MODULUS - 1] (0 bloquerait le générateur).
+local function normalise(state)
+	local s = math.floor(state) % MODULUS
+	if s == 0 then s = 1 end
+	return s
 end
 
 -- Flottant dans [0,1) et nouvel état.
 function M.next(state)
-	local s = avance(state)
-	return (brasse(s) >> 8) / 16777216, s
+	local s = (normalise(state) * MULTIPLIER) % MODULUS
+	return (s - 1) / (MODULUS - 1), s
 end
 
 -- Entier dans [a,b] (bornes incluses) et nouvel état.

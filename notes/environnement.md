@@ -19,7 +19,8 @@ après la dernière session de jeu, il n'a pas encore tourné depuis le staging.
 ## Outils
 
 - Lua 5.5 installé par scoop (`lua`) : sert aux tests hors jeu (`lua tests/run.lua`).
-  Le jeu tourne en Lua 5.4 : le cœur évite toute syntaxe propre à 5.5.
+  **Le jeu tourne en Lua 5.2.2** (chaîne dans `TransportFever3.exe`, confirmé en jeu) : ni `//`,
+  ni opérateurs binaires, nombres en double. Le test N1 « Compatibilité Lua 5.2 du jeu » le vérifie.
 - Teal (`tl`) **absent** : son téléchargement depuis GitHub a été refusé par le mode auto.
   Les fichiers `.tl` ne sont donc vérifiés que par le jeu. Pour l'activer : autoriser le
   téléchargement de `tl.lua` v0.24.8 (teal-language/tl) dans `.build/tools/`.

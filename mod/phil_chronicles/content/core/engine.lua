@@ -10,7 +10,7 @@ function M.new(mods)
 	local E = {}
 
 	function E.quarterIndex(year, month)
-		return year * 4 + (month - 1) // 3
+		return year * 4 + math.floor((month - 1) / 3) -- pas de « // » : le jeu est en Lua 5.2
 	end
 
 	function E.newState(seed)

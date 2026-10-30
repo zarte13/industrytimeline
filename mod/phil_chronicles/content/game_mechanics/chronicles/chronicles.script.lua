@@ -89,7 +89,7 @@ local function readWorld(s)
 	local offset = s.debug.quarterOffset or 0
 	if offset ~= 0 then
 		local q = engine.quarterIndex(world.year, world.month) + offset
-		world.year = q // 4
+		world.year = math.floor(q / 4)
 		world.month = (q % 4) * 3 + 1
 	end
 	return world
@@ -296,7 +296,7 @@ return {
 				local result = engine.tick(s, world, {})
 				applyResult(s, world, result)
 				if result.processed > 0 then
-					say("trimestre " .. world.year .. "-T" .. ((world.month - 1) // 3 + 1) ..
+					say("trimestre " .. world.year .. "-T" .. (math.floor((world.month - 1) / 3) + 1) ..
 						" : " .. #s.events .. " événement(s), " .. #result.notifications .. " notification(s)")
 				end
 				changed = true

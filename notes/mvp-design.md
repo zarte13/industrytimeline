@@ -17,7 +17,7 @@ Le compilateur Teal n'est pas installé sur la machine (téléchargement refusé
 des modules `.lua` avec `ug_require` (comme `::/gui/main/react.lua`) et `ug_require` renvoie
 `any`. Donc :
 
-- `content/core/*.lua` : Lua 5.4 pur, aucun appel à `api`, `log`, `math.random`, `os`, `io`.
+- `content/core/*.lua` : Lua 5.2 pur (version du jeu : pas de `//` ni d'opérateurs binaires), aucun appel à `api`, `log`, `math.random`, `os`, `io`.
   Chaque module fait `return M`. Dépendances entre modules : un paramètre `deps` n'est pas
   nécessaire, chaque module est autonome sauf `engine.lua`, qui reçoit ses modules par
   `engine.new(modules)` (le jeu les charge avec `ug_require`, les tests avec `dofile`).

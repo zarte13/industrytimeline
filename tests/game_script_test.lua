@@ -215,4 +215,50 @@ return function(test, check, eq)
 		end
 		eq(#erreurs, 0, table.concat(erreurs, "; "))
 	end)
+
+	-- Le jeu embarque Lua 5.2.2 (« unexpected symbol near '/' » sur un « // » en jeu, v2) :
+	-- ni division entière, ni opérateurs binaires, ni attributs <const>, et des nombres flottants.
+	test("Compatibilité Lua 5.2 du jeu", function()
+		local windows = package.config:sub(1, 1) == "\\"
+		local lister = io.popen(windows and "dir /s /b mod\\*.lua" or "find mod -name '*.lua'")
+		local erreurs, n = {}, 0
+		for raw in lister:lines() do
+			local f = raw:gsub("%s+$", "")
+			if #f > 0 then
+				n = n + 1
+				local h = assert(io.open(f, "rb"))
+				local src = h:read("a")
+				h:close()
+				-- retire commentaires et chaînes avant de chercher les opérateurs
+				src = src:gsub("%-%-%[(=*)%[.-%]%1%]", " ")
+				src = src:gsub("%[(=*)%[.-%]%1%]", '""')
+				src = src:gsub("%-%-[^\n]*", " ")
+				src = src:gsub('"[^"\\\n]*(\\.[^"\\\n]*)*"', '""')
+				src = src:gsub('"(\\.|[^"\\\n])*"', '""')
+				src = src:gsub("'[^'\\\n]*'", "''")
+				src = src:gsub('"[^"\n]*"', '""')
+				for _, motif in ipairs({ "//", "&", "|", "~[^=]", "<<", ">>", "%f[%w]goto%f[%W]", "<const>", "<close>" }) do
+					local pos = src:find(motif)
+					if pos then
+						erreurs[#erreurs + 1] = f .. " : « " .. src:sub(pos, pos + 12):gsub("\n", " ") .. " »"
+					end
+				end
+			end
+		end
+		lister:close()
+		check(n >= 10, "fichiers Lua introuvables : " .. n)
+		eq(#erreurs, 0, table.concat(erreurs, "; "))
+	end)
+
+	test("Générateur exact en flottants", function()
+		local rng = dofile("mod/phil_chronicles/content/core/rng.lua")
+		local s = 0
+		for _ = 1, 100000 do
+			local f
+			f, s = rng.next(s)
+			check(f >= 0 and f < 1, "tirage hors de [0,1) : " .. tostring(f))
+			check(s == math.floor(s) and s >= 1 and s < 2147483647, "état invalide : " .. tostring(s))
+			check(s * 48271 < 2 ^ 53, "produit inexact en double")
+		end
+	end)
 end

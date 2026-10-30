@@ -20,6 +20,7 @@
 
 - Cœur, adaptateurs et script de jeu en Lua, pas en Teal : le compilateur `tl` n'est pas
   disponible ici, et le jeu accepte `.lua` et `.script.lua`. L'interface reste en Teal.
+  (Erreur de cette session : j'avais supposé Lua 5.4 ; le jeu est en 5.2, corrigé en v3.)
 - Région = ville la plus proche (texte du journal naturel : « Crise de l'acier à Valmont »).
 - La productivité visée est réaffirmée toutes les 10 s de jeu, car `industry_workers.script`
   du jeu la réécrit quand le bonus des travailleurs change.
@@ -44,4 +45,29 @@ prototype conservée) ; le conteur, qui joue le rôle de directeur d'IA, est en 
    Débogage, productivité après sauvegarde, vitesse pour l'autotest).
 7. Fichier `.tl` de l'interface : il n'a pas été vérifié par un compilateur Teal.
 
-**Prochaine étape** : déposer la v2, lancer « Lancer l'autotest » sur `Testgame.sav`, lire `stdout.txt`.
+## 2026-10-30 — premier essai en jeu (v2), correctif v3
+
+**Constaté dans `stdout.txt`** (partie chargée à 19:46)
+
+- Le mod est installé depuis le staging (rev. 2), `preRunFn` tourne.
+- Le jeu **découvre** `chronicles.gs.lua` d'un mod : « Creating entity for newly added GameScript
+  phil_chronicles::/game_mechanics/chronicles/chronicles.gs ». Points 1 et 3 confirmés pour la découverte.
+- L'interface Teal se compile et fonctionne : les clics envoient bien les événements
+  (`[chronicles] interface -> nextPhase`, `fastQuarter`, `runSelfTest`). Point 7 confirmé.
+- **Échec** : le script de jeu ne se charge pas, « unexpected symbol near '/' » ligne 92 (`q // 4`),
+  puis « Expected table at path » à chaque pas. **Le jeu embarque Lua 5.2.2**, pas 5.4 :
+  pas de `//`, pas d'opérateurs binaires (`& | ~ << >>`), nombres en double.
+
+**Correctif v3**
+
+- `//` remplacé par `math.floor(a / b)` (moteur et script de jeu).
+- `core/rng.lua` réécrit en Park et Miller (multiplicateur 48271, module 2^31 - 1) : produits < 2^46,
+  exacts en double. Les tirages changent, les tests de rythme restent dans leurs bandes.
+- Nouveaux tests N1 : « Compatibilité Lua 5.2 du jeu » (cherche ces opérateurs dans tout `mod/`)
+  et « Générateur exact en flottants ». 27 tests verts.
+
+**Encore à vérifier** : chargement de `chronicles.script.lua` et des modules `ug_require` (points 1-2),
+arrivée des événements dans `handleEvent` (point 4), notification (point 5), autotest complet.
+
+**Prochaine étape** : recharger `Testgame.sav` avec la v3 (relancer le jeu si le script n'est pas rechargé),
+« Lancer l'autotest », lire `stdout.txt`.
