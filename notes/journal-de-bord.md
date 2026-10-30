@@ -82,4 +82,20 @@ Un module chargé par `ug_require`/`require` (`core/`, `adapters/`) peut finir p
 Le simulateur (`tests/game_api_mock.lua`, `loadResource`) charge les ressources comme le jeu et échoue
 sans `data()`, vérifié : l'ancienne forme fait 10 échecs. 27 tests verts.
 
-**Prochaine étape** : recharger `Testgame.sav` avec la v4, « Lancer l'autotest », lire `stdout.txt`.
+## 2026-10-30 — essai v4 : le script de jeu tourne
+
+**Confirmé en jeu** (partie chargée à 19:57) :
+
+- Le script de jeu se charge et crée son état (« état initial créé, graine 102401 »). Points 1 et 3 confirmés.
+- Les modules `ug_require "phil_chronicles::/core/…lua"` se chargent depuis le script de jeu (point 2) :
+  le conteur a forcé une crise et le journal a écrit sa manchette.
+- Les événements envoyés par l'interface arrivent dans `handleEvent` (point 4) : « AUTOTEST début ».
+- L'autotest a choisi « Nogent-sur-Seine Camp de bûcherons » (productivité 1), forcé la crise et
+  l'a passée à l'annonce (« Crise de la forêt · Nogent-sur-Seine · l'annonce »).
+- `Testgame.sav` n'a aucune industrie du joueur : le cas « Industries du joueur intactes » est SAUTÉ.
+
+**Pas encore vu** : la partie a été quittée 1 s après l'annonce, avant les relectures de productivité.
+Restent : productivité appliquée, cycle complet, retour exact, notification affichée (point 5),
+ligne « AUTOTEST fin ».
+
+**Prochaine étape** : relancer l'autotest et laisser la partie tourner (non en pause) environ 30 s avant de quitter.
