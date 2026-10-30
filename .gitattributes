@@ -2,3 +2,4 @@
 *.png binary
 *.tga binary
 *.zip binary
+*.sh text eol=lf
