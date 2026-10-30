@@ -23,15 +23,38 @@ return function(test, check, eq)
 	test("Script : abonnements et état initial", function()
 		local m = Mock.new()
 		m.update(0.5)
-		local expected = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest" }
+		local expected = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
+			"prepareSaveTest", "checkSaveTest" }
 		eq(#m.state.subs, #expected, "nombre d'abonnements")
 		for i, name in ipairs(expected) do eq(m.state.subs[i], name, "abonnement " .. i) end
 		local s = m.state:get()
 		eq(s.version, 1, "version")
+		eq(s.subscriptions, 2, "version des abonnements")
 		eq(s.lastQuarter, m.quarterIndex(), "trimestre initial")
 		check(m.hasLog("[chronicles] état initial créé"), "log de l'état initial absent")
 		m.update(0.5)
 		eq(#m.state.subs, #expected, "pas de nouvel abonnement")
+		eq(#m.errorLogs(), 0, "erreurs journalisées")
+	end)
+
+	test("Script : réabonnement d'une ancienne sauvegarde", function()
+		local m = Mock.new()
+		m.update(0.5) -- état créé
+		local old = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest" }
+		local s = m.state:get()
+		s.subscriptions = nil -- sauvegarde d'avant la version 2
+		m.state:set(s)
+		m.state.subs = {}
+		for _, name in ipairs(old) do m.state:subscribeToEvent(name) end
+		m.update(0.5)
+		-- anciens abonnements vidés d'abord : un doublon ferait traiter chaque clic deux fois
+		eq(#m.state.subs, 8, "tous les noms réabonnés, sans doublon")
+		local seen = {}
+		for _, name in ipairs(m.state.subs) do seen[name] = true end
+		for _, name in ipairs({ "prepareSaveTest", "checkSaveTest" }) do check(seen[name], "abonnement manquant : " .. name) end
+		eq(m.state:get().subscriptions, 2, "version des abonnements")
+		m.update(0.5)
+		eq(#m.state.subs, 8, "pas de nouvel abonnement au deuxième update")
 		eq(#m.errorLogs(), 0, "erreurs journalisées")
 	end)
 
@@ -132,15 +155,16 @@ return function(test, check, eq)
 	test("Script : autotest", function()
 		local m = boot()
 		m.handle("runSelfTest")
-		for _ = 1, 40 do m.update(0.2) end
+		for _ = 1, 60 do m.update(0.2) end
 		m.flush()
 		local _, fin = m.hasLog("AUTOTEST fin : ")
 		check(fin, "fin de l'autotest absente")
 		local ok, ko = fin:match("AUTOTEST fin : (%d+) OK, (%d+) ÉCHEC")
-		check(ok and tonumber(ok) >= 3, "moins de 3 OK : " .. tostring(fin))
+		check(ok and tonumber(ok) >= 5, "moins de 5 OK : " .. tostring(fin))
 		eq(tonumber(ko), 0, "échecs de l'autotest : " .. tostring(fin))
 		for _, name in ipairs({ "Productivité appliquée", "Cycle complet d'une crise",
-			"Retour exact à la normale", "Industries du joueur intactes" }) do
+			"Retour exact à la normale", "Industries du joueur intactes", "Tout rétablir",
+			"Coût d'un trimestre" }) do
 			check(m.hasLog("TEST " .. name .. " OK"), "ligne manquante ou en échec : " .. name)
 		end
 		eq(m.productivity(JOUEUR), 1.0)
@@ -155,6 +179,7 @@ return function(test, check, eq)
 		check(fin_notifiee, "notification « Autotest terminé » absente")
 	end)
 
+	local LIMITE_PAS = 13 -- 9 pas dans la simulation + 4
 	test("Script : autotest rapide", function()
 		-- en jeu les pas sont rares (2 à 4 s) : l'autotest doit finir en peu de pas
 		local m = boot()
@@ -163,8 +188,8 @@ return function(test, check, eq)
 		repeat
 			m.update(0.2)
 			pas = pas + 1
-		until m.hasLog("AUTOTEST fin : ") or pas > 40
-		check(pas <= 10, "autotest trop long : " .. pas .. " pas")
+		until m.hasLog("AUTOTEST fin : ") or pas > 60
+		check(pas <= LIMITE_PAS, "autotest trop long : " .. pas .. " pas")
 	end)
 
 	local function lastHash(m)
@@ -186,6 +211,60 @@ return function(test, check, eq)
 		m2.state:set(Mock.deepcopy(m.state:get()))
 		m2.handle("dumpState")
 		eq(lastHash(m2), h1, "empreinte après rechargement")
+	end)
+
+	-- sauvegarde puis rechargement : nouvelle instance du script, état et monde recopiés
+	local function reload(m)
+		local m2 = Mock.new()
+		m2.state:set(Mock.deepcopy(m.state:get()))
+		for k, v in pairs(m.date) do m2.date[k] = v end
+		m2.gameTime = m.gameTime
+		for _, id in ipairs(Mock.industryIds) do m2.setProductivity(id, m.productivity(id)) end
+		return m2
+	end
+	local function titled(m, title)
+		for _, n in ipairs(m.notifications) do if n.params.title == title then return true end end
+		return false
+	end
+	local function prepared()
+		local m = boot()
+		m.handle("prepareSaveTest")
+		check(m.state:get().debug.saveCheck, "marque de sauvegarde absente")
+		for _ = 1, 3 do m.update(0.5) end
+		return m
+	end
+
+	test("Script : test de sauvegarde", function()
+		local m = prepared()
+		local ids = {}
+		for key in pairs(m.state:get().debug.saveCheck.targets) do ids[#ids + 1] = tonumber(key) end
+		check(#ids >= 1, "aucune cible mémorisée")
+		local m2 = reload(m)
+		m2.handle("checkSaveTest")
+		m2.flush()
+		check(m2.hasLog("TEST Sauvegarder en pleine crise OK"), "test de sauvegarde en échec")
+		check(titled(m2, "Test de sauvegarde"), "notification absente")
+		eq(m2.state:get().debug.saveCheck, nil, "marque effacée")
+		eq(#m2.errorLogs(), 0, "erreurs journalisées")
+	end)
+
+	test("Script : test de sauvegarde détecte un doublon", function()
+		local m = prepared()
+		local m2 = reload(m)
+		for key, target in pairs(m2.state:get().debug.saveCheck.targets) do
+			m2.setProductivity(tonumber(key), target * 0.6) -- comme une commande appliquée deux fois
+		end
+		m2.handle("checkSaveTest")
+		m2.flush()
+		check(m2.hasLog("TEST Sauvegarder en pleine crise ÉCHEC"), "doublon non détecté")
+		check(titled(m2, "Test de sauvegarde"), "notification absente")
+	end)
+
+	test("Script : vérifier sans préparer", function()
+		local m = boot()
+		m.handle("checkSaveTest")
+		check(m.hasLog("SAUTÉ"), "pas de ligne SAUTÉ")
+		eq(#m.errorLogs(), 0, "erreurs journalisées")
 	end)
 
 	test("Script : trimestre accéléré", function()

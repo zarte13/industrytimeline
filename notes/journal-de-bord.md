@@ -154,4 +154,20 @@ AUTOTEST fin : 3 OK, 0 ÉCHEC
 **Critère de fin de la phase 1** (plan) : les 17 cas passent et une partie témoin de 10 ans montre au moins
 deux crises de la rumeur à la reprise, sans erreur dans `stdout.txt`.
 
-**Prochaine étape** : les cas N2 manuels ci-dessus, puis la partie témoin de 10 ans.
+## 2026-10-30 — v6 : plus de cas N2 automatisés
+
+- **Autotest** : après « Retour exact », il teste aussi « Tout rétablir » (crise appliquée puis
+  `resetAll`, attention : efface aussi les autres événements en cours) et « Coût d'un trimestre »
+  (`os.clock` sur la lecture du monde + un tick du cœur sur une copie de l'état ; seuil provisoire 50 ms,
+  à fixer d'après la mesure en jeu). SAUTÉ si `os.clock` n'existe pas dans le jeu.
+- **Test de sauvegarde en deux boutons** (onglet Débogage) : « Préparer le test de sauvegarde » (lance
+  une crise si besoin, note l'empreinte et les productivités visées dans `debug.saveCheck`), puis pause,
+  sauvegarde, rechargement, « Vérifier la sauvegarde » : même empreinte et aucune commande appliquée deux
+  fois (sinon base × multiplicateur²). Résultat dans `stdout.txt` et en notification.
+- **Abonnements versionnés** (`SUBSCRIPTIONS_VERSION`, `state.subscriptions`) : les abonnements aux
+  événements sont gardés dans la sauvegarde, donc une ancienne partie ne recevrait pas les nouveaux noms.
+  Le script vide les abonnements (`subscribeToNoEvents`) et se réabonne quand la version monte.
+- Tests N1 : 32 verts (sous-agent Sonnet pour les nouveaux cas, puis correctif des doublons d'abonnement).
+
+**Prochaine étape** : sur `Testgame.sav`, « Lancer l'autotest » (attendre la notification), puis le test
+de sauvegarde. Restent manuels : industrie rasée en pleine crise, fermeture par le jeu, partie témoin de 10 ans.

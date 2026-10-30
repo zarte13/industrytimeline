@@ -4,12 +4,16 @@
 
 local MOD = "phil_chronicles::/"
 local EVENT_ID = "PhilChronicles"
-local EVENT_NAMES = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest" }
+local EVENT_NAMES = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
+	"prepareSaveTest", "checkSaveTest" }
+-- à augmenter quand EVENT_NAMES change : les abonnements sont gardés dans la sauvegarde
+local SUBSCRIPTIONS_VERSION = 2
 local NOTIFICATION_TYPE = "phil_chronicles::/game_mechanics/chronicles/chronicles_notification.script"
 
 local REASSERT_SECONDS = 10.0 -- le script des travailleurs du jeu peut réécrire la productivité
 local FAST_QUARTER_SECONDS = 5.0
 local SELFTEST_POLLS = 20 -- en jeu, le script reçoit un pas toutes les 2 à 4 secondes environ
+local COST_LIMIT_MS = 50 -- seuil provisoire du coût d'un trimestre, à revoir après la mesure en jeu
 
 local engine, journal, world_reader, effects
 
@@ -70,6 +74,25 @@ local function dump(s)
 		hash = (hash * 33 + text:byte(i)) % 4294967296
 	end
 	return text, string.format("%08x", hash)
+end
+
+local function deepCopy(v)
+	if type(v) ~= "table" then
+		return v
+	end
+	local out = {}
+	for k, x in pairs(v) do
+		out[k] = deepCopy(x)
+	end
+	return out
+end
+
+-- empreinte de l'état sans la marque du test de sauvegarde elle-même
+local function saveHash(s)
+	local copy = deepCopy(s)
+	copy.debug.saveCheck = nil
+	local __, hash = dump(copy)
+	return hash
 end
 
 local function ensureState(s)
@@ -219,12 +242,63 @@ local function stepSelfTest(s)
 		if near(actual, t.before) or t.polls >= SELFTEST_POLLS then
 			report("Retour exact à la normale", near(actual, t.before),
 				"avant " .. tostring(t.before) .. ", relue " .. tostring(actual) .. " après " .. t.polls .. " pas")
-			local __, hash = dump(s)
-			say("TEST empreinte de l'état " .. hash .. " (sauvegarder, recharger, « Écrire l'état » doit redonner la même)")
-			t.step = "end"
+			t.step = "reset"
 		else
 			t.polls = t.polls + 1
 		end
+
+	-- « Tout rétablir » : une crise appliquée, puis resetAll doit rendre la productivité d'avant
+	elseif t.step == "reset" then
+		local ev = engine.forceEvent(s, world, { industryId = t.industry })
+		if ev == nil then
+			report("Tout rétablir", false, "crise refusée sur l'industrie de l'autotest")
+			t.step = "cost"
+		else
+			applyResult(s, world, engine.nextPhase(s, world))
+			t.step, t.polls = "resetApplied", 0
+		end
+
+	elseif t.step == "resetApplied" then
+		local target = engine.targets(s)[t.industry]
+		local actual = world_reader.getProductivity(t.industry)
+		if near(actual, target) or t.polls >= SELFTEST_POLLS then
+			say("autotest : « Tout rétablir » efface aussi les autres événements en cours")
+			effects.apply(engine.resetAll(s))
+			s.journal = journal.describe(s, world)
+			t.step, t.polls = "resetDone", 0
+		else
+			t.polls = t.polls + 1
+		end
+
+	elseif t.step == "resetDone" then
+		local actual = world_reader.getProductivity(t.industry)
+		if (near(actual, t.before) and #s.events == 0) or t.polls >= SELFTEST_POLLS then
+			report("Tout rétablir", near(actual, t.before) and #s.events == 0,
+				"avant " .. tostring(t.before) .. ", relue " .. tostring(actual) .. ", " .. #s.events .. " événement(s)")
+			t.step = "cost"
+		else
+			t.polls = t.polls + 1
+		end
+
+	-- coût d'un trimestre : lecture du monde + tick du cœur sur une copie de l'état, au trimestre suivant
+	elseif t.step == "cost" then
+		if os == nil or os.clock == nil then
+			say("TEST Coût d'un trimestre SAUTÉ (os.clock indisponible)")
+		else
+			local start = os.clock()
+			local w = world_reader.read()
+			local copy = deepCopy(s)
+			local q = engine.quarterIndex(w.year, w.month) + (s.debug.quarterOffset or 0) + 1
+			w.year, w.month = math.floor(q / 4), (q % 4) * 3 + 1
+			engine.tick(copy, w, { frequency = 1, cooldown = 0 })
+			local ms = (os.clock() - start) * 1000
+			report("Coût d'un trimestre", ms <= COST_LIMIT_MS,
+				string.format("%.1f ms pour %d industries (seuil %d ms)", ms, #w.industries, COST_LIMIT_MS))
+			say(string.format("mesure : un trimestre coûte %.1f ms pour %d industries et %d villes", ms, #w.industries, #w.towns))
+		end
+		local __, hash = dump(s)
+		say("TEST empreinte de l'état " .. hash)
+		t.step = "end"
 
 	else
 		local ok, ko = 0, 0
@@ -268,6 +342,46 @@ local function handleDebug(s, name, param)
 		local sent = effects.apply(targets)
 		s.journal = journal.describe(s, world)
 		say("tout rétabli (" .. sent .. " commande(s))")
+	-- test « Sauvegarder en pleine crise », en deux temps autour d'une sauvegarde et d'un rechargement
+	elseif name == "prepareSaveTest" then
+		local world = readWorld(s)
+		if next(engine.targets(s)) == nil then
+			local ev, why = engine.forceEvent(s, world, {})
+			if ev == nil then
+				say("test de sauvegarde impossible : " .. tostring(why))
+				return
+			end
+			applyResult(s, world, engine.nextPhase(s, world)) -- jusqu'à l'annonce, pour avoir des effets
+		end
+		s.debug.saveCheck = { hash = saveHash(s), targets = {} }
+		for id, target in pairs(engine.targets(s)) do
+			s.debug.saveCheck.targets[tostring(id)] = target
+		end
+		say("test de sauvegarde préparé, empreinte " .. s.debug.saveCheck.hash ..
+			" : mettre en pause, sauvegarder, recharger, puis « Vérifier la sauvegarde »")
+	elseif name == "checkSaveTest" then
+		local check = s.debug.saveCheck
+		if check == nil then
+			say("TEST Sauvegarder en pleine crise SAUTÉ (cliquer d'abord « Préparer le test de sauvegarde »)")
+			return
+		end
+		local hash = saveHash(s)
+		local problems = {}
+		if hash ~= check.hash then
+			problems[#problems + 1] = "empreinte " .. hash .. " au lieu de " .. check.hash
+		end
+		-- une commande appliquée deux fois donnerait base × multiplicateur²
+		for key, target in pairs(check.targets) do
+			local actual = world_reader.getProductivity(tonumber(key))
+			if not near(actual, target) then
+				problems[#problems + 1] = "industrie " .. key .. " à " .. tostring(actual) .. " au lieu de " .. tostring(target)
+			end
+		end
+		local ok = #problems == 0
+		say("TEST Sauvegarder en pleine crise" .. (ok and " OK" or (" ÉCHEC " .. table.concat(problems, " ; "))))
+		notify({ kind = ok and "done" or "announce", title = "Test de sauvegarde",
+			text = ok and "OK : même état après rechargement" or "ÉCHEC (détail dans stdout.txt)" })
+		s.debug.saveCheck = nil
 	elseif name == "runSelfTest" then
 		selftest = { step = "start", wait = 0, results = {} }
 		say("AUTOTEST début")
@@ -280,17 +394,22 @@ end
 -- seuls les modules chargés par ug_require finissent par return.
 local script = {
 	update = function(_userParams, state, dt)
-		if not state:hasEventSubscriptions() then
-			for __, name in ipairs(EVENT_NAMES) do
-				state:subscribeToEvent(name)
-			end
-		end
 		loadModules()
 
 		local s = state:get()
 		local fresh = s == nil or s.version == nil
 		s = ensureState(s)
 		local changed = fresh
+
+		if not state:hasEventSubscriptions() or (s.subscriptions or 1) < SUBSCRIPTIONS_VERSION then
+			-- on repart de zéro : un nom abonné deux fois pourrait livrer chaque événement deux fois
+			state:subscribeToNoEvents()
+			for __, name in ipairs(EVENT_NAMES) do
+				state:subscribeToEvent(name)
+			end
+			s.subscriptions = SUBSCRIPTIONS_VERSION
+			changed = true
+		end
 
 		if selftest ~= nil then
 			changed = stepSelfTest(s) or changed

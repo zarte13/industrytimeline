@@ -92,6 +92,7 @@ function M.new()
 	function state:set(t) self.data = deepcopy(t); self.sets = self.sets + 1 end
 	function state:hasEventSubscriptions() return #self.subs > 0 end
 	function state:subscribeToEvent(name) self.subs[#self.subs + 1] = name end
+	function state:subscribeToNoEvents() self.subs = {} end
 	mock.state = state
 
 	local function stockEntityOf(entity)
