@@ -184,7 +184,7 @@ return function(test, check, eq)
 	end)
 
 	test("Notification : données du type", function()
-		local data = dofile(Mock.NOTIFICATION_SCRIPT)
+		local data = Mock.loadResource(Mock.NOTIFICATION_SCRIPT)
 		local a = data.useDataState({ kind = "announce", title = "Crise annoncée", description = "Texte" })
 		eq(a.title, "Crise annoncée")
 		eq(a.description, "Texte")

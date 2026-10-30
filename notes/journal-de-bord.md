@@ -69,5 +69,17 @@ prototype conservée) ; le conteur, qui joue le rôle de directeur d'IA, est en 
 **Encore à vérifier** : chargement de `chronicles.script.lua` et des modules `ug_require` (points 1-2),
 arrivée des événements dans `handleEvent` (point 4), notification (point 5), autotest complet.
 
-**Prochaine étape** : recharger `Testgame.sav` avec la v3 (relancer le jeu si le script n'est pas rechargé),
-« Lancer l'autotest », lire `stdout.txt`.
+## 2026-10-30 — essai v3, correctif v4
+
+**Constaté** : la syntaxe passe, mais « function data() not defined » au chargement de
+`chronicles.script@update` (pile : `base/content/base.zip/base/init.lua`).
+
+**Règle du jeu** : un fichier `.lua` chargé comme **ressource** (script de jeu `.script.lua`, type de
+notification, `.gs.lua`, `.res.lua`) doit définir une fonction globale `data()` qui renvoie la table.
+Un module chargé par `ug_require`/`require` (`core/`, `adapters/`) peut finir par `return`, comme `react.lua`.
+
+**Correctif v4** : `chronicles.script.lua` et `chronicles_notification.script.lua` définissent `data()`.
+Le simulateur (`tests/game_api_mock.lua`, `loadResource`) charge les ressources comme le jeu et échoue
+sans `data()`, vérifié : l'ancienne forme fait 10 échecs. 27 tests verts.
+
+**Prochaine étape** : recharger `Testgame.sav` avec la v4, « Lancer l'autotest », lire `stdout.txt`.

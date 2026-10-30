@@ -6,6 +6,19 @@ local M = {}
 local CONTENT = "mod/phil_chronicles/content/"
 M.SCRIPT = CONTENT .. "game_mechanics/chronicles/chronicles.script.lua"
 M.NOTIFICATION_SCRIPT = CONTENT .. "game_mechanics/chronicles/chronicles_notification.script.lua"
+
+-- Charge une ressource .lua comme le jeu : exécute le fichier puis appelle la fonction globale data().
+-- Un fichier qui se contente de return échoue, comme en jeu (« function data() not defined »).
+function M.loadResource(path)
+	_G.data = nil
+	dofile(path)
+	local fn = _G.data
+	_G.data = nil
+	if type(fn) ~= "function" then
+		error("function data() not defined : " .. path)
+	end
+	return fn()
+end
 M.PLAYER = 1
 M.WORLD = 1
 
@@ -194,7 +207,7 @@ function M.new()
 	_G.ug_require = mock.ug_require
 	_G.log = mock.log
 	_G.api = api
-	mock.script = dofile(M.SCRIPT)
+	mock.script = M.loadResource(M.SCRIPT)
 
 	function mock.update(dt)
 		mock.gameTime = mock.gameTime + math.floor((dt or 0) * 1000)

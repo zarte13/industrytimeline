@@ -261,7 +261,9 @@ end
 
 -- ---------------------------------------------------------------- script de jeu
 
-return {
+-- Une ressource .lua doit définir data() (sinon « function data() not defined ») ;
+-- seuls les modules chargés par ug_require finissent par return.
+local script = {
 	update = function(_userParams, state, dt)
 		if not state:hasEventSubscriptions() then
 			for __, name in ipairs(EVENT_NAMES) do
@@ -324,3 +326,7 @@ return {
 		state:set(s)
 	end,
 }
+
+function data()
+	return script
+end

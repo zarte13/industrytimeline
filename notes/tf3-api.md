@@ -3,6 +3,14 @@
 Relevé le 2026-10-30 dans `api/tealdef`, `base/tealdef` et les zips de `base/content`
 (lus avec `unzip -p`). « NON CONFIRMÉ » = déduit, à vérifier en jeu.
 
+## Ressources Lua et modules (confirmé en jeu, v3)
+
+- Un `.lua` chargé comme **ressource** (`x.script.lua` d'un script de jeu ou d'un type de notification,
+  `.gs.lua`, `.res.lua`, `.con.lua`) doit définir la fonction globale `data()` qui renvoie la table.
+  Sinon : « function data() not defined » (`base/init.lua`, `dataNotDefined`).
+- Un module chargé par `ug_require`/`require` (chemin finissant par `.lua` ou `.tl`) finit par `return`.
+- Le jeu embarque **Lua 5.2.2** : ni `//`, ni opérateurs binaires, nombres en double.
+
 ## Script de jeu
 
 - Deux fichiers : `x.gs.lua` (`data()` renvoie `updateScript`, `handleEventScript`, option

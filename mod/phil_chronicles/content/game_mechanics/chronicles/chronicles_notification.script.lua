@@ -1,9 +1,10 @@
 -- Type de notification du mod : le titre et le texte arrivent tout faits dans les paramètres
 -- (modèle : landmarks_notification_nonpersistent du jeu de base)
 
-local data = {}
+-- Ressource .lua : le jeu appelle data() (un simple return donne « function data() not defined »).
+local notificationType = {}
 
-data.useDataState = function(params)
+notificationType.useDataState = function(params)
 	local icon = "::/game_mechanics/notifications/gui/icons/building_industry_x.tga"
 	if params.kind == "recovery" or params.kind == "done" then
 		icon = "::/game_mechanics/notifications/gui/icons/building_industry_plus.tga"
@@ -15,4 +16,6 @@ data.useDataState = function(params)
 	}
 end
 
-return data
+function data()
+	return notificationType
+end
