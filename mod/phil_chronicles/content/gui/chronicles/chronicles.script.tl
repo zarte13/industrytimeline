@@ -1,6 +1,7 @@
--- Chroniques économiques : prototype d'interface (test 1)
--- Vérifie : bouton dans la zone des mods, fenêtre à 3 onglets, lecture de l'état du jeu,
--- bloc ajouté à la fenêtre native d'une industrie, commande de productivité.
+-- Chroniques économiques : interface du mod
+-- Bouton dans la zone des mods, fenêtre à onglets (Journal, Économie, Bilan, Débogage),
+-- bloc ajouté à la fenêtre native d'une industrie. L'état vient du script de jeu
+-- game_mechanics/chronicles ; les boutons de débogage lui envoient des événements.
 
 local react = ug_require "::/gui/main/react.lua" as React
 local builtin = ug_require "::/gui/main/builtin.lua" as Builtin
@@ -13,10 +14,61 @@ local util = ug_require "::/scripts/util.tl" as Util
 local cargo_util = ug_require "::/gui/main/cargo_util.tl" as CargoUtil
 
 local WINDOW_ID = "phil_chronicles.window"
+local GAME_SCRIPT = "phil_chronicles::/game_mechanics/chronicles/chronicles.gs"
+local EVENT_ID = "PhilChronicles"
 
 local record ChroniclesWindowParams
 	initialTab : string
 	onClose : function()
+end
+
+-- ---------------------------------------------------------------- état du script de jeu
+
+-- sous-ensemble de l'état sauvegardé (notes/mvp-design.md) lu par l'interface
+local record ChroniclesEvent
+	id : integer
+	phase : string
+	regionName : string
+	industries : {integer}
+	multiplier : number
+end
+
+local record ChroniclesDebug
+	fastQuarter : boolean
+end
+
+local record ChroniclesState
+	journal : {string}
+	events : {ChroniclesEvent}
+	debug : ChroniclesDebug
+end
+
+local function readGameState() : ChroniclesState
+	local entity = api.engine.system.gameScriptSystem.getEntityForGameScript(GAME_SCRIPT)
+	if entity == nil or entity < 0 then
+		return nil
+	end
+	local gameScript = api.engine.getComponent(entity, api.type.ComponentType.GAME_SCRIPT) as Engine.Component.GameScript<ChroniclesState>
+	if gameScript == nil then
+		return nil
+	end
+	return gameScript.state
+end
+
+local function activeEvents(state : ChroniclesState) : {ChroniclesEvent}
+	local list : {ChroniclesEvent} = {}
+	if state == nil or state.events == nil then
+		return list
+	end
+	for __, ev in ipairs(state.events) do
+		if ev.phase ~= "done" then list[#list + 1] = ev end
+	end
+	return list
+end
+
+local function sendToScript(name : string, param : table)
+	log.message("[chronicles] interface -> " .. name)
+	api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", EVENT_ID, name, param))
 end
 
 -- ---------------------------------------------------------------- utilitaires
@@ -62,15 +114,6 @@ local function getProductivity(entity : Engine.Entity) : number
 	return stockList.modifiers.productivity
 end
 
-local function setProductivity(entity : Engine.Entity, value : number)
-	local modifiers = api.type.StockList.Modifiers.new()
-	modifiers.productivity = value
-	log.message("[chronicles] industrie " .. tostring(entity) .. ", stocklist " .. tostring(getStockListEntity(entity)))
-	api.cmd.sendCommand(api.cmd.makeStockListSetModifiersCmd(entity, modifiers), function(_data : any, success : boolean)
-		log.message("[chronicles] productivité " .. tostring(value) .. " -> " .. tostring(success))
-	end)
-end
-
 local function getName(entity : Engine.Entity) : string
 	-- même fonction que les statistiques du jeu
 	return api.engine.util.getEntityName(entity) or ("#" .. tostring(entity))
@@ -78,15 +121,57 @@ end
 
 -- ---------------------------------------------------------------- onglets
 
-local function journalTab() : TreeNodeId
-	return vbox({
-		text("Le Courrier économique · édition du 4e trimestre 1931", "font-scale-annotation"),
-		text("CRISE · LE CREUX · TRIMESTRE 4 SUR 8", "font-scale-annotation"),
-		text("Les Forges du Nord fermeront dans deux ans sans nouveaux débouchés", "font-scale-headline"),
-		text("Les aciéries de la vallée tournent toujours à 60 % de leur capacité. Sans acheteurs pour leur acier, les Forges du Nord fermeront à l'été 1933."),
-		text("En bref : Port-Bellard dépasse les 6 000 habitants."),
-	}, "chronicles-tab")
+-- texte écrit par le script de jeu à chaque trimestre (core/journal.lua)
+local JournalTab = react.RegisterRecipe("ChroniclesJournalTab", function() : TreeNodeId
+	local linesState = engine_react_util.useStepStateTimer(function() : {string}
+		local state = readGameState()
+		if state == nil or state.journal == nil then
+			return { "Le journal paraîtra au prochain trimestre." }
+		end
+		return state.journal
+	end)
+	local children : {TreeNodeId} = {
+		text("Le Courrier économique", "font-scale-headline"),
+	}
+	for __, line in ipairs(linesState:old()) do
+		children[#children + 1] = text(line)
+	end
+	return vbox(children, "chronicles-tab")
+end)
+
+local function debugButton(label : string, tooltip : string, onClick : function()) : TreeNodeId
+	return builtin.Button{
+		meta = { class = "secondary", tooltip = tooltip },
+		onClick = onClick,
+		content = text(label),
+	}
 end
+
+-- pilote le script de jeu ; les résultats s'écrivent dans stdout.txt avec le préfixe [chronicles]
+local DebugTab = react.RegisterRecipe("ChroniclesDebugTab", function() : TreeNodeId
+	local fastState = engine_react_util.useStepStateTimer(function() : boolean
+		local state = readGameState()
+		return state ~= nil and state.debug ~= nil and state.debug.fastQuarter == true
+	end)
+	local countState = engine_react_util.useStepStateTimer(function() : integer
+		return #activeEvents(readGameState())
+	end)
+	local fast = fastState:old()
+	return vbox({
+		text("Débogage", "font-scale-headline"),
+		text("Événements actifs : " .. tostring(countState:old()) .. " · trimestre accéléré : " .. (fast and "oui" or "non")),
+		hbox({
+			debugButton("Lancer l'autotest", "Écrit TEST <nom> OK ou ÉCHEC dans stdout.txt", function() sendToScript("runSelfTest", {}) end),
+			debugButton("Forcer un événement", "Crise sectorielle choisie par le conteur", function() sendToScript("forceEvent", {}) end),
+			debugButton("Phase suivante", "Fait avancer tous les événements d'une phase", function() sendToScript("nextPhase", {}) end),
+		}, "chronicles-row"),
+		hbox({
+			debugButton(fast and "Trimestre normal" or "Trimestre accéléré", "Un trimestre toutes les 5 secondes de jeu", function() sendToScript("fastQuarter", { on = not fast }) end),
+			debugButton("Écrire l'état", "Copie l'état et son empreinte dans stdout.txt", function() sendToScript("dumpState", {}) end),
+			debugButton("Tout rétablir", "Productivités d'avant le mod, événements effacés", function() sendToScript("resetAll", {}) end),
+		}, "chronicles-row"),
+	}, "chronicles-tab")
+end)
 
 local EconomyTab = react.RegisterRecipe("ChroniclesEconomyTab", function() : TreeNodeId
 	-- lecture de l'état du moteur, rafraîchie par minuterie
@@ -238,9 +323,10 @@ local ChroniclesWindow = react.RegisterWrapperRecipe("ChroniclesWindow", builtin
 					if v is string then tabState:set(v) end
 				end,
 				tabs = {
-					tab("journal", "Journal", journalTab()),
+					tab("journal", "Journal", JournalTab{}),
 					tab("economie", "Économie", EconomyTab{}),
-					tab("bilan", "Bilan 1931", ReportTab{}),
+					tab("bilan", "Bilan", ReportTab{}),
+					tab("debogage", "Débogage", DebugTab{}),
 				},
 			},
 			},
@@ -263,19 +349,24 @@ end
 -- ---------------------------------------------------------------- plugins
 
 local ChroniclesButtonPlugin = react.RegisterPluginRecipe(main_mod_button_area.MainModButtonAreaExtension, "ChroniclesButtonPlugin", function() : TreeNodeId
+	local countState = engine_react_util.useStepStateTimer(function() : integer
+		return #activeEvents(readGameState())
+	end)
+	local count = countState:old()
+	local content : {TreeNodeId} = { text("Chroniques", "font-scale-body") }
+	if count > 0 then
+		content[#content + 1] = text(tostring(count), "font-scale-body, chronicles-badge")
+	end
 	-- la racine d'une recette doit être une mise en page (BoxLayout), pas un Button
 	return hbox({
 		builtin.Button{
 			-- sans classe, un Button du jeu a un fond invisible ; "primary" = fond d'accent (default.css.lua)
-			meta = { class = "primary, chronicles-button", tooltip = "Chroniques économiques · 2 non lus" },
+			meta = { class = "primary, chronicles-button", tooltip = "Chroniques économiques · " .. tostring(count) .. " événement(s) en cours" },
 			onClick = function()
 				log.message("[chronicles] clic sur le bouton du mod")
 				openWindow("journal")
 			end,
-			content = hbox({
-				text("Chroniques", "font-scale-body"),
-				text("2", "font-scale-body, chronicles-badge"),
-			}),
+			content = hbox(content),
 		},
 	})
 end)
@@ -285,22 +376,28 @@ local ChroniclesIndustryPlugin = react.RegisterPluginRecipe(industry_eow.Industr
 	local prodState = engine_react_util.useStepStateTimer(function() : number
 		return getProductivity(entity)
 	end)
+	-- phase de l'événement qui touche cette industrie, ou nil
+	local phaseState = engine_react_util.useStepStateTimer(function() : string
+		for __, ev in ipairs(activeEvents(readGameState())) do
+			for __, id in ipairs(ev.industries or {}) do
+				if id == entity then return ev.phase .. " · " .. ev.regionName end
+			end
+		end
+		return nil
+	end)
 	local prod = prodState:old()
 	local prodText = prod < 0 and "inconnue" or (tostring(math.floor(prod * 100 + 0.5)) .. " %")
+	local phase = phaseState:old()
 
 	return vbox({
 		text("Chroniques économiques", "font-scale-headline"),
 		text(getName(entity) .. " · productivité : " .. prodText),
+		text(phase ~= nil and ("En crise : " .. phase) or "Aucun événement en cours ici."),
 		hbox({
 			builtin.Button{
-				meta = { class = "secondary", tooltip = "Test : applique une crise (−40 %)" },
-				onClick = function() setProductivity(entity, 0.6) end,
-				content = text("Test crise −40 %"),
-			},
-			builtin.Button{
-				meta = { class = "secondary", tooltip = "Test : rétablit la productivité" },
-				onClick = function() setProductivity(entity, 1.0) end,
-				content = text("Rétablir 100 %"),
+				meta = { class = "secondary", tooltip = "Débogage : lance une crise sectorielle sur cette industrie" },
+				onClick = function() sendToScript("forceEvent", { industryId = entity }) end,
+				content = text("Forcer une crise ici"),
 			},
 			builtin.Button{
 				meta = { class = "primary" },

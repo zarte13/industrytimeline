@@ -1,7 +1,7 @@
 {
     "authors": [ { "name": "Philippe", "role": "CREATOR" } ],
-    "description": "Prototype d'interface : bouton du mod, fenêtre à trois onglets, bloc dans la fenêtre d'industrie.",
-    "name": "Chroniques économiques (prototype UI)",
+    "description": "Une crise sectorielle se déroule seule, de la rumeur à la reprise : productivité réduite, notifications, journal et onglet Débogage avec autotest.",
+    "name": "Chroniques économiques (MVP)",
     "tags": [ "Script" ],
     "url": ""
 }
