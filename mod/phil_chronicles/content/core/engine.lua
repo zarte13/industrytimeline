@@ -21,6 +21,11 @@ function M.new(mods)
 		}
 	end
 
+	-- Deux décimales, virgule française.
+	local function virgule(x)
+		return (string.format("%.2f", x):gsub("%.", ","))
+	end
+
 	local function newResult(state)
 		return { state = state, targets = {}, notifications = {}, log = {}, processed = 0 }
 	end
@@ -71,11 +76,9 @@ function M.new(mods)
 
 	-- Notifications et log pour un changement de phase ; restore reçoit les bases à rétablir.
 	local function transition(state, result, restore, ev, phase)
-		if phase == "announce" or phase == "recovery" then
-			result.notifications[#result.notifications + 1] = {
-				kind = phase, eventId = ev.id, text = journal.notification(phase, ev),
-			}
-		end
+		result.notifications[#result.notifications + 1] = {
+			kind = phase, eventId = ev.id, text = journal.notification(phase, ev),
+		}
 		result.log[#result.log + 1] = journal.headline(ev)
 		if phase == "done" then
 			for _, id in ipairs(ev.industries) do
@@ -101,7 +104,9 @@ function M.new(mods)
 		state.events[#state.events + 1] = ev
 		state.lastLaunch = quarter
 		if result then
-			result.log[#result.log + 1] = journal.notification("rumor", ev)
+			local texte = journal.notification("rumor", ev)
+			result.log[#result.log + 1] = texte
+			result.notifications[#result.notifications + 1] = { kind = "rumor", eventId = ev.id, text = texte }
 		end
 		return ev
 	end
@@ -146,13 +151,27 @@ function M.new(mods)
 		end
 		nettoieBase(state)
 
-		local go
-		go, state.rng = storyteller.roll(state.rng, state, quarter, params, deps)
-		if go then
-			local info = regions.build(world)
-			local plan
-			plan, _, state.rng = storyteller.select(state.rng, world, info, state, nil, deps)
-			if plan then launch(state, world, plan, quarter, result, restore) end
+		local go, tirage
+		go, state.rng, tirage = storyteller.roll(state.rng, state, quarter, params, deps)
+		if tirage.wait then
+			result.log[#result.log + 1] = "Conteur : attente, prochain tirage dans " .. tirage.wait .. " trimestre(s)"
+		else
+			local debut = "Conteur : tirage " .. virgule(tirage.value) .. " pour un seuil de " .. virgule(tirage.threshold)
+			if not go then
+				result.log[#result.log + 1] = debut .. ", pas de crise"
+			else
+				local info = regions.build(world)
+				local plan, why
+				plan, why, state.rng = storyteller.select(state.rng, world, info, state, nil, deps)
+				if plan then
+					local ev = launch(state, world, plan, quarter, result, restore)
+					-- la ligne du conteur précède celle de la rumeur
+					table.insert(result.log, #result.log, debut .. ", crise lancée : " .. journal.headline(ev))
+				else
+					result.log[#result.log + 1] = "Conteur : tirage " .. virgule(tirage.value) ..
+						" réussi mais aucune crise possible (" .. tostring(why) .. ")"
+				end
+			end
 		end
 		elague(state)
 	end
@@ -184,6 +203,16 @@ function M.new(mods)
 			state.lastQuarter = q
 		end
 		return finalise(state, result, restore)
+	end
+
+	-- État du conteur après le trimestre donné : wait = trimestres avant le prochain tirage
+	-- (0 = tirage au prochain trimestre), chance = probabilité du tirage.
+	function E.storytellerStatus(state, quarter, params)
+		params = params or {}
+		local cooldown = params.cooldown or catalog.defaultCooldown
+		local wait = 0
+		if state.lastLaunch then wait = math.max(0, cooldown - (quarter + 1 - state.lastLaunch)) end
+		return { wait = wait, chance = params.frequency or catalog.defaultFrequency }
 	end
 
 	-- Fait avancer tous les événements actifs d'une phase (débogage).

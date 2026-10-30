@@ -12,6 +12,8 @@ end
 local function entre(ev, phase, quarter, catalog)
 	ev.phase = phase
 	ev.quartersInPhase = 0
+	ev.history = ev.history or {} -- anciennes sauvegardes : l'historique commence ici
+	ev.history[#ev.history + 1] = { phase = phase, quarter = quarter }
 	if phase == "announce" or phase == "trough" then
 		ev.multiplier = catalog.crisisMultiplier
 	elseif phase == "recovery" then
@@ -20,6 +22,7 @@ local function entre(ev, phase, quarter, catalog)
 		ev.multiplier = 1.0
 		if phase == "done" then ev.endQuarter = quarter end
 	end
+	if ev.minMultiplier == nil or ev.multiplier < ev.minMultiplier then ev.minMultiplier = ev.multiplier end
 end
 
 function M.new(id, sector, regionId, regionName, industries, troughLength, quarter, catalog)
@@ -30,6 +33,7 @@ function M.new(id, sector, regionId, regionName, industries, troughLength, quart
 		phase = "rumor", quartersInPhase = 0,
 		troughLength = troughLength, multiplier = 1.0,
 		startQuarter = quarter, endQuarter = nil,
+		history = { { phase = "rumor", quarter = quarter } }, minMultiplier = 1.0,
 	}
 end
 

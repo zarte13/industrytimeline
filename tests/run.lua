@@ -359,40 +359,194 @@ test("resetAll rend les productivités de base", function()
 end)
 
 test("Notifications", function()
-	-- une annonce et une reprise par crise, au bon trimestre, dans les simulations
+	-- une notification par phase entrée : rumeur (conteur seulement), annonce, creux, reprise, fin
+	local PHASES = { "rumor", "announce", "trough", "recovery", "done" }
 	for _, out in ipairs({ SIM_A, SIM_STRESS, SIM_FORCE }) do
-		local ann, rec, autres = {}, {}, 0
+		local par = {}
 		for _, n in ipairs(out.notifications) do
 			noPlaceholder(n.text, "notification")
 			check(#n.text > 0, "texte vide")
-			if n.kind == "announce" then ann[n.eventId] = (ann[n.eventId] or 0) + 1
-			elseif n.kind == "recovery" then rec[n.eventId] = (rec[n.eventId] or 0) + 1
-			else autres = autres + 1 end
+			par[n.eventId] = par[n.eventId] or {}
+			local liste = par[n.eventId]
+			check(liste[n.kind] == nil, "notification en double : " .. n.kind .. " (crise " .. n.eventId .. ")")
+			liste[n.kind] = n.quarter
 		end
-		eq(autres, 0, "types de notification inattendus")
 		for id, h in pairs(out.hist) do
-			eq(ann[id], 1, "annonces de la crise " .. id)
-			eq(rec[id], 1, "reprises de la crise " .. id)
+			local vue = {}
 			for k, p in ipairs(h.phases) do
-				for _, n in ipairs(out.notifications) do
-					if n.eventId == id and n.kind == "announce" and p == "announce" then eq(n.quarter, h.quarters[k], "trimestre de l'annonce") end
-					if n.eventId == id and n.kind == "recovery" and p == "recovery" and h.phases[k - 1] ~= "recovery" then
-						eq(n.quarter, h.quarters[k], "trimestre de la reprise")
-					end
+				if vue[p] == nil then vue[p] = h.quarters[k] end
+			end
+			for _, p in ipairs(PHASES) do
+				local q = par[id] and par[id][p]
+				if p == "rumor" then
+					-- les crises forcées n'ont pas de rumeur lancée par le conteur
+					check(q == nil or q == vue.rumor or q == h.start, "trimestre de la rumeur")
+				elseif vue[p] then
+					eq(q, vue[p], "trimestre de la notification " .. p .. " (crise " .. id .. ")")
+				else
+					eq(q, nil, "notification " .. p .. " sans phase (crise " .. id .. ")")
 				end
 			end
 		end
 	end
+	-- sans forçage, chaque crise a sa rumeur
+	local rumeurs = {}
+	for _, n in ipairs(SIM_A.notifications) do
+		if n.kind == "rumor" then rumeurs[n.eventId] = true end
+	end
+	for id in pairs(SIM_A.hist) do check(rumeurs[id], "rumeur non notifiée (crise " .. id .. ")") end
 	-- pas à pas avec nextPhase
 	local engine, world, state = setup(14)
 	engine.forceEvent(state, world, { industryId = 1 })
-	local attendu = { "announce", nil, "recovery", nil }
+	local attendu = { "announce", "trough", "recovery", "done" }
 	for i = 1, 4 do
 		local r = engine.nextPhase(state, world)
-		eq(#r.notifications, attendu[i] and 1 or 0, "notifications à l'étape " .. i)
-		if attendu[i] then eq(r.notifications[1].kind, attendu[i]) end
+		eq(#r.notifications, 1, "notifications à l'étape " .. i)
+		eq(r.notifications[1].kind, attendu[i])
+		noPlaceholder(r.notifications[1].text, "notification " .. attendu[i])
 	end
 	eq(state.events[1].phase, "done")
+	check(mods.journal.notification("trough", state.events[1]):find("Creux de la crise", 1, true), "modèle du creux")
+end)
+
+test("Historique des phases", function()
+	local engine, world, state = setup(3)
+	local ev = engine.forceEvent(state, world, { industryId = 1 })
+	local q0 = state.lastQuarter
+	eq(#ev.history, 1)
+	eq(ev.history[1].phase, "rumor")
+	eq(ev.history[1].quarter, q0)
+	near(ev.minMultiplier, 1.0, "plancher initial")
+	for _ = 1, 12 do
+		fake.advanceQuarter(world)
+		engine.tick(state, world, NOFREQ)
+	end
+	eq(ev.phase, "done")
+	local noms = {}
+	for i, h in ipairs(ev.history) do
+		noms[#noms + 1] = h.phase
+		if i > 1 then check(h.quarter > ev.history[i - 1].quarter, "trimestres croissants") end
+	end
+	eq(table.concat(noms, ","), "rumor,announce,trough,recovery,done")
+	eq(ev.history[#ev.history].quarter, ev.endQuarter, "fin")
+	near(ev.minMultiplier, 0.6, "plancher")
+	-- skip et finish sont aussi enregistrés
+	local e2, w2, s2 = setup(4)
+	local ev2 = e2.forceEvent(s2, w2, { industryId = 1 })
+	e2.nextPhase(s2, w2)
+	eq(ev2.history[#ev2.history].phase, "announce", "skip")
+	near(ev2.minMultiplier, 0.6)
+	mods.lifecycle.finish(ev2, s2.lastQuarter, mods.catalog)
+	eq(ev2.history[#ev2.history].phase, "done", "finish")
+	eq(#ev2.history, 3)
+	-- une ancienne sauvegarde sans history continue de fonctionner
+	local e3, w3, s3 = setup(5)
+	local ev3 = e3.forceEvent(s3, w3, { industryId = 1 })
+	ev3.history, ev3.minMultiplier = nil, nil
+	for _ = 1, 12 do
+		fake.advanceQuarter(w3)
+		e3.tick(s3, w3, NOFREQ)
+	end
+	eq(ev3.phase, "done", "ancien événement mené à terme")
+end)
+
+test("Décisions du conteur", function()
+	local P = { frequency = 0.25, cooldown = 4 }
+	local engine, world, state = setup(21, P)
+	local attente, tirage, lancee = 0, 0, 0
+	for _ = 1, 80 do
+		fake.advanceQuarter(world)
+		local avant = #state.events
+		local r = engine.tick(state, world, P)
+		local lignes = {}
+		for _, l in ipairs(r.log) do
+			if l:sub(1, 9) == "Conteur :" then lignes[#lignes + 1] = l end
+		end
+		eq(#lignes, 1, "une ligne du conteur par trimestre")
+		local l = lignes[1]
+		if l:find("attente", 1, true) then
+			attente = attente + 1
+			check(l:find("^Conteur : attente, prochain tirage dans %d+ trimestre%(s%)$"), l)
+		elseif l:find("crise lancée : ", 1, true) then
+			lancee = lancee + 1
+			eq(#state.events, avant + 1, "crise lancée")
+			local ev = state.events[#state.events]
+			check(l:find(mods.journal.headline(ev), 1, true), "manchette absente : " .. l)
+			check(l:find("^Conteur : tirage %d,%d%d pour un seuil de 0,25, crise lancée : "), l)
+		else
+			tirage = tirage + 1
+			check(l:find("^Conteur : tirage %d,%d%d pour un seuil de 0,25, pas de crise$"), l)
+		end
+	end
+	check(attente > 0 and tirage > 0 and lancee > 0, "cas non exercés : " .. attente .. "/" .. tirage .. "/" .. lancee)
+	-- monde vide : le tirage réussit mais rien n'est possible
+	local e2 = newEngine()
+	local w2 = { year = 1900, month = 1, day = 1, towns = { { id = 1, name = "Alba", x = 0, y = 0 } }, industries = {} }
+	local s2 = e2.newState(3)
+	local F = { frequency = 1.0, cooldown = 0 }
+	e2.tick(s2, w2, F)
+	fake.advanceQuarter(w2)
+	local r = e2.tick(s2, w2, F)
+	eq(#r.log, 1)
+	check(r.log[1]:find("^Conteur : tirage %d,%d%d réussi mais aucune crise possible %(aucune industrie éligible%)$"), r.log[1])
+end)
+
+test("Statut du conteur", function()
+	local P = { frequency = 1.0, cooldown = 4 }
+	local engine, world, state = setup(30, P)
+	fake.advanceQuarter(world)
+	engine.tick(state, world, P)
+	eq(#state.events, 1, "crise lancée")
+	local st = engine.storytellerStatus(state, state.lastQuarter, P)
+	eq(st.wait, 3, "attente juste après le lancement")
+	near(st.chance, 1.0, "chance")
+	for i = 1, 3 do
+		fake.advanceQuarter(world)
+		engine.tick(state, world, P)
+		eq(#state.events, 1, "recharge au trimestre " .. i)
+	end
+	eq(engine.storytellerStatus(state, state.lastQuarter, P).wait, 0, "recharge finie")
+	fake.advanceQuarter(world)
+	engine.tick(state, world, P)
+	eq(#state.events, 2, "tirage au trimestre annoncé")
+	-- paramètres par défaut et partie sans lancement
+	local d = engine.storytellerStatus(engine.newState(1), 7600, {})
+	eq(d.wait, 0)
+	near(d.chance, mods.catalog.defaultFrequency, "chance par défaut")
+end)
+
+test("Chronologie", function()
+	local ev1 = { id = 1, sector = "steel_mill", regionName = "Valmont", industries = { 1, 2 }, phase = "done",
+		multiplier = 1.0, startQuarter = 7725, endQuarter = 7734, minMultiplier = 0.6,
+		history = { { phase = "rumor", quarter = 7725 }, { phase = "announce", quarter = 7726 },
+			{ phase = "trough", quarter = 7727 }, { phase = "recovery", quarter = 7730 }, { phase = "done", quarter = 7734 } } }
+	local ev2 = { id = 2, sector = "coal_mine", regionName = "Brenne", industries = { 3 }, phase = "announce",
+		multiplier = 0.6, startQuarter = 7736, minMultiplier = 0.6,
+		history = { { phase = "rumor", quarter = 7736 }, { phase = "announce", quarter = 7737 } } }
+	local ancien = { id = 0, sector = "steel_mill", regionName = "Valmont", industries = { 9 }, phase = "done",
+		multiplier = 1.0, startQuarter = 7700, endQuarter = 7704 }
+	local state = { nextEventId = 4, lastQuarter = 7737, events = { ancien, ev1, ev2 } }
+	local lignes = mods.journal.chronicle(state, { year = 1934, month = 4, industries = {} })
+	local attendu = {
+		"3 crises depuis le début de la partie, dont 1 en cours",
+		"1934 T1 → en cours · Crise du charbon · Brenne · 1 trimestre · 1 industrie · plancher 60 %",
+		"   rumeur 1934 T1 · annonce 1934 T2",
+		"1931 T2 → 1933 T3 · Crise de l'acier · Valmont · 9 trimestres · 2 industries · plancher 60 %",
+		"   rumeur 1931 T2 · annonce 1931 T3 · creux 1931 T4 · reprise 1932 T3 · fin 1933 T3",
+		"1925 T1 → 1926 T1 · Crise de l'acier · Valmont · 4 trimestres · 1 industrie",
+	}
+	eq(#lignes, #attendu, "nombre de lignes")
+	for i, l in ipairs(attendu) do eq(lignes[i], l, "ligne " .. i) end
+	-- aucune crise
+	local vide = mods.journal.chronicle(newEngine().newState(1), { year = 1900, month = 1, industries = {} })
+	eq(vide[1], "0 crise depuis le début de la partie, dont 0 en cours")
+	eq(#vide, 1)
+	-- cohérence avec une vraie crise
+	local engine, world, st = setup(3)
+	engine.forceEvent(st, world, { industryId = 1 })
+	local l2 = mods.journal.chronicle(st, world)
+	eq(l2[1], "1 crise depuis le début de la partie, dont 1 en cours")
+	check(l2[2]:find("en cours", 1, true) and l2[3]:find("rumeur 1900 T1", 1, true), l2[2] .. " / " .. l2[3])
 end)
 
 -- Script de jeu avec API simulée (N2)

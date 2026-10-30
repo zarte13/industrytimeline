@@ -230,6 +230,21 @@ passent, hors jeu et en jeu. Reste un essai manuel de 3 minutes, « Retirer le m
 Hors critère mais recommandés avant la phase 2 : une vraie partie de 10 ans pour juger le rythme, et
 une partie avec une industrie du joueur.
 
+## 2026-10-30 — v9 : feedback pour la partie témoin réelle
+
+Demande de Philippe : plus de feedback de débogage sur ce qui se passe en arrière-plan, une chronologie
+dans le Journal, une notification à chaque phase. Conception : `notes/feedback-design.md`.
+
+- Cœur (sous-agent Sonnet) : `ev.history` (date de chaque phase), `ev.minMultiplier`, une ligne
+  « Conteur : … » par trimestre (attente, tirage contre seuil, crise lancée, ou aucune crise possible et pourquoi),
+  notification à chaque phase, `engine.storytellerStatus`, `journal.chronicle`. `keepFinished` 40.
+- Script de jeu : `s.activity` (40 dernières lignes datées : décisions du conteur, phases, changements de
+  productivité, **réaffirmations** quand le jeu a modifié une productivité, commandes de débogage, erreurs),
+  `s.storyteller`, `s.chronicle`, réglage `debug.allNotifications` (vrai par défaut), abonnements v4.
+- Interface : Journal + « Chronologie » ; Débogage + ligne du conteur, bouton des notifications,
+  « Activité du moteur ».
+- Tests N1 : 41 verts, dont « Script : feedback de partie ».
+
 **Restent pour clore la phase 1** (voir la procédure) : retirer le mod (Tout rétablir, sauvegarder, désactiver, recharger sans le
 mod), industrie rasée en pleine crise, fermeture décidée par le jeu, industrie du joueur en jeu (il faut une
 partie où tu possèdes une industrie), partie témoin de 10 ans avec au moins deux crises complètes.

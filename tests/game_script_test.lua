@@ -24,12 +24,12 @@ return function(test, check, eq)
 		local m = Mock.new()
 		m.update(0.5)
 		local expected = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
-			"prepareSaveTest", "checkSaveTest", "runWitness" }
+			"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications" }
 		eq(#m.state.subs, #expected, "nombre d'abonnements")
 		for i, name in ipairs(expected) do eq(m.state.subs[i], name, "abonnement " .. i) end
 		local s = m.state:get()
 		eq(s.version, 1, "version")
-		eq(s.subscriptions, 3, "version des abonnements")
+		eq(s.subscriptions, 4, "version des abonnements")
 		eq(s.lastQuarter, m.quarterIndex(), "trimestre initial")
 		check(m.hasLog("[chronicles] état initial créé"), "log de l'état initial absent")
 		m.update(0.5)
@@ -53,15 +53,15 @@ return function(test, check, eq)
 			m.update(0.5)
 			local label = "sauvegarde v" .. tostring(cas[1] or 1)
 			-- anciens abonnements vidés d'abord : un doublon ferait traiter chaque clic deux fois
-			eq(#m.state.subs, 9, label .. " : tous les noms réabonnés, sans doublon")
+			eq(#m.state.subs, 10, label .. " : tous les noms réabonnés, sans doublon")
 			local seen = {}
 			for _, name in ipairs(m.state.subs) do seen[name] = true end
 			for _, name in ipairs({ "prepareSaveTest", "checkSaveTest", "runWitness" }) do
 				check(seen[name], label .. " : abonnement manquant : " .. name)
 			end
-			eq(m.state:get().subscriptions, 3, label .. " : version des abonnements")
+			eq(m.state:get().subscriptions, 4, label .. " : version des abonnements")
 			m.update(0.5)
-			eq(#m.state.subs, 9, label .. " : pas de nouvel abonnement au deuxième update")
+			eq(#m.state.subs, 10, label .. " : pas de nouvel abonnement au deuxième update")
 			eq(#m.errorLogs(), 0, "erreurs journalisées")
 		end
 	end)
@@ -158,6 +158,57 @@ return function(test, check, eq)
 		check(m.commands > sent, "cible jamais renvoyée")
 		m.update(0.1)
 		near(m.productivity(VALMONT_ACIERIE), 0.6, 0.01, "cible rétablie")
+	end)
+
+	-- feedback demandé pour la partie témoin réelle (v9) : activité, chronologie, conteur, notifications
+	test("Script : feedback de partie", function()
+		local function activityHas(m, text)
+			for _, line in ipairs(m.state:get().activity or {}) do
+				if line:find(text, 1, true) then return true end
+			end
+			return false
+		end
+		local function notified(m, title)
+			for _, n in ipairs(m.notifications) do if n.params.title == title then return true end end
+			return false
+		end
+		local m = boot()
+		m.handle("forceEvent", { industryId = VALMONT_ACIERIE })
+		m.handle("nextPhase")
+		m.update(0.1)
+		check(activityHas(m, "crise forcée : "), "crise forcée absente de l'activité")
+		check(activityHas(m, "productivité : "), "changement de productivité absent de l'activité")
+		m.setProductivity(VALMONT_ACIERIE, 1.0) -- le jeu de base réécrit la productivité
+		for _ = 1, 11 do m.update(1) end
+		check(activityHas(m, "réaffirmation : "), "réaffirmation absente de l'activité")
+		-- par défaut, une notification à chaque phase
+		m.handle("nextPhase") -- annonce -> creux
+		m.update(0.1)
+		check(notified(m, "Creux de la crise"), "notification du creux absente")
+		-- trimestres réels : décisions du conteur, statut, chronologie
+		for _ = 1, 6 do
+			m.advanceQuarter()
+			m.update(1)
+		end
+		local s = m.state:get()
+		check(activityHas(m, "Conteur : "), "décision du conteur absente de l'activité")
+		check(s.storyteller and (s.storyteller:find("tirage", 1, true) ~= nil), "statut du conteur : " .. tostring(s.storyteller))
+		check(s.chronicle and #s.chronicle >= 2 and s.chronicle[1]:find("crise", 1, true), "chronologie absente")
+		check(#s.activity <= 40, "activité non bornée : " .. #s.activity)
+		check(s.activity[1]:find("^%d+ T%d · "), "activité non datée : " .. s.activity[1])
+		-- réglage : annonce et reprise seulement
+		m.handle("toggleNotifications")
+		eq(m.state:get().debug.allNotifications, false, "réglage des notifications")
+		m.notifications = {}
+		m.handle("forceEvent", { industryId = VALMONT_ACIERIE })
+		m.handle("nextPhase") -- rumeur -> annonce
+		m.handle("nextPhase") -- annonce -> creux
+		m.handle("nextPhase") -- creux -> reprise
+		m.update(0.1)
+		check(notified(m, "Crise annoncée"), "annonce non notifiée")
+		check(notified(m, "Reprise"), "reprise non notifiée")
+		check(not notified(m, "Creux de la crise"), "creux notifié malgré le réglage")
+		eq(#m.errorLogs(), 0, "erreurs journalisées")
 	end)
 
 	test("Script : autotest", function()

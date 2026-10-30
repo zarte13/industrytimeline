@@ -35,11 +35,15 @@ end
 
 local record ChroniclesDebug
 	fastQuarter : boolean
+	allNotifications : boolean
 end
 
 local record ChroniclesState
 	journal : {string}
 	headlines : {string}
+	chronicle : {string}
+	activity : {string}
+	storyteller : string
 	events : {ChroniclesEvent}
 	debug : ChroniclesDebug
 end
@@ -131,11 +135,26 @@ local JournalTab = react.RegisterRecipe("ChroniclesJournalTab", function() : Tre
 		end
 		return state.journal
 	end)
+	-- toutes les crises de la partie, datées (core/journal.lua, chronicle)
+	local chronicleState = engine_react_util.useStepStateTimer(function() : {string}
+		local state = readGameState()
+		if state == nil or state.chronicle == nil then
+			return {}
+		end
+		return state.chronicle
+	end)
 	local children : {TreeNodeId} = {
 		text("Le Courrier économique", "font-scale-headline"),
 	}
 	for __, line in ipairs(linesState:old()) do
 		children[#children + 1] = text(line)
+	end
+	local chronicle = chronicleState:old()
+	if #chronicle > 0 then
+		children[#children + 1] = text("Chronologie", "font-scale-headline")
+		for __, line in ipairs(chronicle) do
+			children[#children + 1] = text(line, "font-scale-annotation")
+		end
 	end
 	return vbox(children, "chronicles-tab")
 end)
@@ -157,10 +176,39 @@ local DebugTab = react.RegisterRecipe("ChroniclesDebugTab", function() : TreeNod
 	local countState = engine_react_util.useStepStateTimer(function() : integer
 		return #activeEvents(readGameState())
 	end)
+	local allNotificationsState = engine_react_util.useStepStateTimer(function() : boolean
+		local state = readGameState()
+		return state == nil or state.debug == nil or state.debug.allNotifications ~= false
+	end)
+	local storytellerState = engine_react_util.useStepStateTimer(function() : string
+		local state = readGameState()
+		return state ~= nil and state.storyteller or "Conteur : en attente du premier trimestre"
+	end)
+	-- dernières décisions du moteur, la plus récente en haut (écrites par le script de jeu)
+	local activityState = engine_react_util.useStepStateTimer(function() : {string}
+		local state = readGameState()
+		if state == nil or state.activity == nil then
+			return {}
+		end
+		return state.activity
+	end)
 	local fast = fastState:old()
+	local allNotifications = allNotificationsState:old()
+	local activityRows : {TreeNodeId} = {}
+	for __, line in ipairs(activityState:old()) do
+		activityRows[#activityRows + 1] = text(line, "font-scale-annotation")
+	end
+	if #activityRows == 0 then
+		activityRows[1] = text("Rien encore : l'activité s'affiche au prochain trimestre.", "font-scale-annotation")
+	end
 	return vbox({
 		text("Débogage", "font-scale-headline"),
 		text("Événements actifs : " .. tostring(countState:old()) .. " · trimestre accéléré : " .. (fast and "oui" or "non")),
+		text(storytellerState:old()),
+		hbox({
+			debugButton(allNotifications and "Notifications : chaque phase" or "Notifications : annonce et reprise",
+				"Cliquer pour basculer", function() sendToScript("toggleNotifications", {}) end),
+		}, "chronicles-row"),
 		hbox({
 			debugButton("Lancer l'autotest", "Écrit TEST <nom> OK ou ÉCHEC dans stdout.txt", function() sendToScript("runSelfTest", {}) end),
 			debugButton("Forcer un événement", "Crise sectorielle choisie par le conteur", function() sendToScript("forceEvent", {}) end),
@@ -179,6 +227,8 @@ local DebugTab = react.RegisterRecipe("ChroniclesDebugTab", function() : TreeNod
 			debugButton("Préparer le test de sauvegarde", "Lance une crise si besoin et note l'empreinte de l'état", function() sendToScript("prepareSaveTest", {}) end),
 			debugButton("Vérifier la sauvegarde", "Après rechargement : même empreinte, aucune commande appliquée deux fois", function() sendToScript("checkSaveTest", {}) end),
 		}, "chronicles-row"),
+		text("Activité du moteur", "font-scale-headline"),
+		vbox(activityRows),
 	}, "chronicles-tab")
 end)
 

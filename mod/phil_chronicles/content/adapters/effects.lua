@@ -8,8 +8,9 @@ local M = {}
 M.tolerance = 0.005
 
 -- targets : { [entité] = productivité visée } ; renvoie le nombre de commandes envoyées
+-- et leur détail { { entity, name, from, to } } pour le journal d'activité
 function M.apply(targets)
-	local sent = 0
+	local sent, changes = 0, {}
 	for key, target in pairs(targets) do
 		local entity = tonumber(key)
 		if entity ~= nil and api.engine.entityExists(entity) then
@@ -22,10 +23,14 @@ function M.apply(targets)
 				modifiers.productivity = target
 				api.cmd.sendCommand(api.cmd.makeStockListSetModifiersCmd(entity, modifiers))
 				sent = sent + 1
+				changes[#changes + 1] = {
+					entity = entity, from = current, to = target,
+					name = api.engine.util.getEntityName(entity) or ("#" .. tostring(entity)),
+				}
 			end
 		end
 	end
-	return sent
+	return sent, changes
 end
 
 return M

@@ -5,9 +5,14 @@
 local MOD = "phil_chronicles::/"
 local EVENT_ID = "PhilChronicles"
 local EVENT_NAMES = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
-	"prepareSaveTest", "checkSaveTest", "runWitness" }
+	"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications" }
 -- à augmenter quand EVENT_NAMES change : les abonnements sont gardés dans la sauvegarde
-local SUBSCRIPTIONS_VERSION = 3
+local SUBSCRIPTIONS_VERSION = 4
+local ACTIVITY_MAX = 40 -- lignes gardées dans « Activité du moteur »
+local NOTIFICATION_TITLES = {
+	rumor = "Rumeur", announce = "Crise annoncée", trough = "Creux de la crise",
+	recovery = "Reprise", done = "Fin de crise",
+}
 local NOTIFICATION_TYPE = "phil_chronicles::/game_mechanics/chronicles/chronicles_notification.script"
 
 local REASSERT_SECONDS = 10.0 -- le script des travailleurs du jeu peut réécrire la productivité
@@ -47,6 +52,38 @@ local selftest = nil
 
 local function say(line)
 	log.message("[chronicles] " .. line)
+end
+
+-- « 1931 T2 » (trimestre du mod, décalage du trimestre accéléré compris)
+local function quarterLabel(q)
+	if q == nil then return "—" end
+	return math.floor(q / 4) .. " T" .. (q % 4 + 1)
+end
+
+local function decimal(x)
+	return (string.format("%.2f", x or 0):gsub("%.", ","))
+end
+
+-- une ligne dans stdout.txt et dans « Activité du moteur » (onglet Débogage), datée du trimestre
+local function trace(s, line)
+	say(line)
+	s.activity = s.activity or {}
+	table.insert(s.activity, 1, quarterLabel(s.lastQuarter) .. " · " .. line)
+	while #s.activity > ACTIVITY_MAX do
+		table.remove(s.activity)
+	end
+end
+
+-- productivités modifiées par le mod ; reassert = le jeu les avait changées entre-temps
+local function traceChanges(s, changes, reassert)
+	for __, c in ipairs(changes or {}) do
+		if reassert then
+			trace(s, "réaffirmation : " .. c.name .. " était à " .. decimal(c.from) ..
+				" (changée par le jeu), remise à " .. decimal(c.to))
+		else
+			trace(s, "productivité : " .. c.name .. " " .. decimal(c.from) .. " → " .. decimal(c.to))
+		end
+	end
 end
 
 -- ---------------------------------------------------------------- état
@@ -92,10 +129,12 @@ local function deepCopy(v)
 	return out
 end
 
--- empreinte de l'état sans la marque du test de sauvegarde elle-même
+-- empreinte de l'état sans la marque du test de sauvegarde elle-même, ni l'activité (une réaffirmation
+-- entre la préparation et la vérification ajoute une ligne sans rien changer au moteur)
 local function saveHash(s)
 	local copy = deepCopy(s)
 	copy.debug.saveCheck = nil
+	copy.activity = nil
 	local __, hash = dump(copy)
 	return hash
 end
@@ -125,7 +164,7 @@ local function readWorld(s)
 end
 
 local function notify(n)
-	local title = n.title or (n.kind == "announce" and "Crise annoncée" or "Reprise")
+	local title = n.title or NOTIFICATION_TITLES[n.kind] or "Chroniques économiques"
 	local notification = {
 		type = NOTIFICATION_TYPE,
 		params = { kind = n.kind, title = title, description = n.text },
@@ -143,21 +182,33 @@ local function refreshJournal(s, world)
 			s.headlines[#s.headlines + 1] = journal.headline(ev)
 		end
 	end
+	s.chronicle = journal.chronicle(s, world)
+	if s.lastQuarter ~= nil then
+		local st = engine.storytellerStatus(s, s.lastQuarter, {})
+		s.storyteller = (st.wait > 0 and ("Prochain tirage dans " .. st.wait .. " trimestre(s)") or "Tirage au prochain trimestre")
+			.. " · chance " .. math.floor(st.chance * 100 + 0.5) .. " %"
+	end
+end
+
+-- notification de chaque phase, ou seulement annonce et reprise si le joueur l'a choisi (onglet Débogage)
+local function wantsNotification(s, kind)
+	if s.debug.allNotifications == false then
+		return kind == "announce" or kind == "recovery"
+	end
+	return true
 end
 
 -- applique un résultat du cœur : cibles, notifications, log, texte du journal
 local function applyResult(s, world, result)
-	local sent = effects.apply(result.targets)
+	local __, changes = effects.apply(result.targets)
 	for __, n in ipairs(result.notifications) do
-		notify(n)
+		if wantsNotification(s, n.kind) then notify(n) end
 	end
 	for __, line in ipairs(result.log) do
-		say(line)
+		trace(s, line)
 	end
+	traceChanges(s, changes, false)
 	refreshJournal(s, world)
-	if sent > 0 and s.debug.verbose then
-		say(tostring(sent) .. " commande(s) de productivité")
-	end
 end
 
 -- ---------------------------------------------------------------- autotest (N2)
@@ -372,7 +423,7 @@ local function stepWitness(s, processed)
 	local ok = completed >= WITNESS_MIN_COMPLETED and w.errors == 0
 	local summary = launched .. " crise(s) lancée(s), " .. completed .. " terminée(s) de la rumeur à la reprise, " ..
 		w.errors .. " erreur(s)"
-	say("TEST Partie témoin accélérée (10 ans)" .. (ok and " OK " or " ÉCHEC ") .. summary)
+	trace(s, "TEST Partie témoin accélérée (10 ans)" .. (ok and " OK " or " ÉCHEC ") .. summary)
 	notify({ kind = ok and "done" or "announce", title = "Partie témoin terminée", text = summary })
 	s.debug.witness = nil
 	s.debug.fastQuarter = false
@@ -386,9 +437,9 @@ local function handleDebug(s, name, param)
 		local world = readWorld(s)
 		local ev, why = engine.forceEvent(s, world, { industryId = param.industryId })
 		if ev ~= nil then
-			say("crise forcée : " .. journal.headline(ev))
+			trace(s, "crise forcée : " .. journal.headline(ev))
 		else
-			say("crise refusée : " .. tostring(why))
+			trace(s, "crise refusée : " .. tostring(why))
 		end
 		refreshJournal(s, world)
 	elseif name == "nextPhase" then
@@ -396,7 +447,7 @@ local function handleDebug(s, name, param)
 		applyResult(s, world, engine.nextPhase(s, world))
 	elseif name == "fastQuarter" then
 		s.debug.fastQuarter = param.on == true
-		say("trimestre accéléré : " .. (s.debug.fastQuarter and "oui" or "non"))
+		trace(s, "trimestre accéléré : " .. (s.debug.fastQuarter and "oui" or "non"))
 	elseif name == "dumpState" then
 		local text, hash = dump(s)
 		say("ÉTAT " .. hash .. " " .. text)
@@ -405,14 +456,14 @@ local function handleDebug(s, name, param)
 		local targets = engine.resetAll(s)
 		local sent = effects.apply(targets)
 		refreshJournal(s, world)
-		say("tout rétabli (" .. sent .. " commande(s))")
+		trace(s, "tout rétabli (" .. sent .. " commande(s))")
 	-- test « Sauvegarder en pleine crise », en deux temps autour d'une sauvegarde et d'un rechargement
 	elseif name == "prepareSaveTest" then
 		local world = readWorld(s)
 		if next(engine.targets(s)) == nil then
 			local ev, why = engine.forceEvent(s, world, {})
 			if ev == nil then
-				say("test de sauvegarde impossible : " .. tostring(why))
+				trace(s, "test de sauvegarde impossible : " .. tostring(why))
 				return
 			end
 			applyResult(s, world, engine.nextPhase(s, world)) -- jusqu'à l'annonce, pour avoir des effets
@@ -421,7 +472,7 @@ local function handleDebug(s, name, param)
 		for id, target in pairs(engine.targets(s)) do
 			s.debug.saveCheck.targets[tostring(id)] = target
 		end
-		say("test de sauvegarde préparé, empreinte " .. s.debug.saveCheck.hash ..
+		trace(s, "test de sauvegarde préparé, empreinte " .. s.debug.saveCheck.hash ..
 			" : mettre en pause, sauvegarder, recharger, puis « Vérifier la sauvegarde »")
 	elseif name == "checkSaveTest" then
 		local check = s.debug.saveCheck
@@ -442,7 +493,7 @@ local function handleDebug(s, name, param)
 			end
 		end
 		local ok = #problems == 0
-		say("TEST Sauvegarder en pleine crise" .. (ok and " OK" or (" ÉCHEC " .. table.concat(problems, " ; "))))
+		trace(s, "TEST Sauvegarder en pleine crise" .. (ok and " OK" or (" ÉCHEC " .. table.concat(problems, " ; "))))
 		notify({ kind = ok and "done" or "announce", title = "Test de sauvegarde",
 			text = ok and "OK : même état après rechargement" or "ÉCHEC (détail dans stdout.txt)" })
 		s.debug.saveCheck = nil
@@ -453,11 +504,14 @@ local function handleDebug(s, name, param)
 		end
 		s.debug.witness = { remaining = WITNESS_QUARTERS, firstEventId = s.nextEventId, errors = 0 }
 		s.debug.fastQuarter = true
-		say("TÉMOIN début : " .. WITNESS_QUARTERS .. " trimestres accélérés, un toutes les " ..
+		trace(s, "TÉMOIN début : " .. WITNESS_QUARTERS .. " trimestres accélérés, un toutes les " ..
 			WITNESS_QUARTER_SECONDS .. " s de jeu (la date du mod avance de 10 ans sur celle du jeu)")
+	elseif name == "toggleNotifications" then
+		s.debug.allNotifications = s.debug.allNotifications == false
+		trace(s, "notifications : " .. (s.debug.allNotifications and "chaque phase" or "annonce et reprise seulement"))
 	elseif name == "runSelfTest" then
 		selftest = { step = "start", wait = 0, results = {} }
-		say("AUTOTEST début")
+		trace(s, "AUTOTEST début")
 	end
 end
 
@@ -515,6 +569,7 @@ local script = {
 					-- trimestre marqué traité pour ne pas reboucler sur la même erreur à chaque pas
 					log.error("[chronicles] erreur pendant le trimestre", tostring(result))
 					s.lastQuarter = quarter
+					trace(s, "ERREUR pendant le trimestre : " .. tostring(result))
 					if s.debug.witness ~= nil then
 						s.debug.witness.errors = s.debug.witness.errors + 1
 					end
@@ -525,7 +580,11 @@ local script = {
 			clock.reassert = clock.reassert + dt
 			if clock.reassert >= REASSERT_SECONDS then
 				clock.reassert = 0.0
-				effects.apply(engine.targets(s))
+				local sent, changes = effects.apply(engine.targets(s))
+				if sent > 0 then
+					traceChanges(s, changes, true)
+					changed = true
+				end
 			end
 		end
 

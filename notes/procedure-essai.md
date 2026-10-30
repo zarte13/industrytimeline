@@ -38,6 +38,21 @@ sauvegarde de test, pas sur une vraie partie.
 - Les notifications « Crise annoncée » et « Reprise » s'affichent-elles (titre, texte, icône) ?
 - Le Journal et le bloc de la fenêtre d'industrie sont-ils lisibles ?
 
+## 6. Partie témoin réelle (10 ans de jeu)
+
+Jouer normalement, mod actif, sur une partie neuve ou de test. Ce qu'on voit pendant la partie :
+
+- une notification à chaque phase de chaque crise (bouton « Notifications » de Débogage pour revenir à
+  annonce et reprise seulement) ;
+- Débogage : « Prochain tirage dans N trimestre(s) · chance 25 % », puis « Activité du moteur » :
+  chaque trimestre, la décision du conteur (« tirage 0,42 pour un seuil de 0,25, pas de crise »), les phases,
+  les productivités changées, et les **réaffirmations** quand le jeu a modifié une productivité ;
+- Journal : crises en cours, puis « Chronologie » de toute la partie (dates de chaque phase, durée,
+  industries, plancher).
+
+À la fin : dire « lis-le ». Claude compte les crises et les erreurs dans `stdout.txt`, et on juge ensemble
+le rythme (trop de crises, pas assez, trop longues).
+
 ## Hors de portée d'un essai rapide
 
 - Industrie du joueur en jeu : il faut une partie où l'on possède une industrie (le cas passe hors jeu).

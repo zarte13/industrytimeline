@@ -21,6 +21,7 @@ local PHASES = {
 local MODELES = {
 	rumor = "Rumeur : {noun} {de} inquiète",
 	announce = "Crise {of} {ou} : production réduite à {pct} %",
+	trough = "Creux de la crise {of} {ou} : production à {pct} %",
 	recovery = "Reprise {ou} : {noun} se redresse, la production remonte",
 	done = "Fin de la crise {of} {ou}",
 }
@@ -68,7 +69,7 @@ function M.headline(ev)
 	return txt
 end
 
--- Texte de notification ou de log pour une phase (rumor, announce, recovery, done).
+-- Texte de notification ou de log pour une phase (rumor, announce, trough, recovery, done).
 function M.notification(kind, ev)
 	return remplit(MODELES[kind] or MODELES.done, variables(ev))
 end
@@ -117,6 +118,52 @@ function M.describe(state, world)
 	local debut = math.max(1, #finies - 2)
 	for i = #finies, debut, -1 do
 		lignes[#lignes + 1] = "Terminée : " .. M.headline(finies[i])
+	end
+	return lignes
+end
+
+-- « 1931 T2 » pour un indice de trimestre.
+local function trimestre(q)
+	return math.floor(q / 4) .. " T" .. (q % 4 + 1)
+end
+
+local ETIQUETTES = { rumor = "rumeur", announce = "annonce", trough = "creux", recovery = "reprise", done = "fin" }
+
+local function pluriel(n, mot)
+	return n .. " " .. mot .. (n > 1 and "s" or "")
+end
+
+-- Chronologie : ligne de compte puis, par événement (actifs puis finis, récent d'abord), deux lignes.
+-- Un événement sans history (ancienne sauvegarde) n'a que la première.
+function M.chronicle(state, world)
+	local actifs, finis = {}, {}
+	for i = #state.events, 1, -1 do
+		local ev = state.events[i]
+		if ev.phase == "done" then finis[#finis + 1] = ev else actifs[#actifs + 1] = ev end
+	end
+	local now = state.lastQuarter
+	if not now and world and world.year then now = world.year * 4 + math.floor(((world.month or 1) - 1) / 3) end
+	local total = (state.nextEventId or (#state.events + 1)) - 1
+	local lignes = { pluriel(total, "crise") .. " depuis le début de la partie, dont " .. #actifs .. " en cours" }
+	for _, liste in ipairs({ actifs, finis }) do
+		for _, ev in ipairs(liste) do
+			local fin = ev.endQuarter
+			local texte = trimestre(ev.startQuarter) .. " → " .. (fin and trimestre(fin) or "en cours")
+			local duree = (fin or now or ev.startQuarter) - ev.startQuarter
+			texte = texte .. " · Crise " .. variables(ev).of .. " · " .. ev.regionName .. " · " ..
+				pluriel(duree, "trimestre") .. " · " .. pluriel(#ev.industries, "industrie")
+			if ev.minMultiplier then
+				texte = texte .. " · plancher " .. math.floor(ev.minMultiplier * 100 + 0.5) .. " %"
+			end
+			lignes[#lignes + 1] = texte
+			if ev.history and #ev.history > 0 then
+				local etapes = {}
+				for _, h in ipairs(ev.history) do
+					etapes[#etapes + 1] = (ETIQUETTES[h.phase] or h.phase) .. " " .. trimestre(h.quarter)
+				end
+				lignes[#lignes + 1] = "   " .. table.concat(etapes, " · ")
+			end
+		end
 	end
 	return lignes
 end

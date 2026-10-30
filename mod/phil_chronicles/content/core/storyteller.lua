@@ -2,12 +2,16 @@
 -- deps = { rng, catalog, guardrails } fournis par le moteur (pas de require ici).
 local M = {}
 
--- Tirage du trimestre. Renvoie lancer (booléen) et le nouvel état du générateur.
+-- Tirage du trimestre. Renvoie lancer (booléen), le nouvel état du générateur et info :
+-- { wait = n } (recharge en cours, tirage dans n trimestres) ou { value = f, threshold = p }.
 function M.roll(rngState, state, quarter, params, deps)
 	local cooldown = params.cooldown or deps.catalog.defaultCooldown
-	if state.lastLaunch and quarter - state.lastLaunch < cooldown then return false, rngState end
+	if state.lastLaunch and quarter - state.lastLaunch < cooldown then
+		return false, rngState, { wait = cooldown - (quarter - state.lastLaunch) }
+	end
+	local seuil = params.frequency or deps.catalog.defaultFrequency
 	local f, s = deps.rng.next(rngState)
-	return f < (params.frequency or deps.catalog.defaultFrequency), s
+	return f < seuil, s, { value = f, threshold = seuil }
 end
 
 -- Choisit région, secteur et industries. filter : { industryId?, sector?, regionId? }
