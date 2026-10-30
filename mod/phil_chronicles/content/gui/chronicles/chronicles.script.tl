@@ -170,6 +170,9 @@ local DebugTab = react.RegisterRecipe("ChroniclesDebugTab", function() : TreeNod
 			debugButton("Écrire l'état", "Copie l'état et son empreinte dans stdout.txt", function() sendToScript("dumpState", {}) end),
 			debugButton("Tout rétablir", "Productivités d'avant le mod, événements effacés", function() sendToScript("resetAll", {}) end),
 		}, "chronicles-row"),
+		hbox({
+			debugButton("Partie témoin accélérée (10 ans)", "40 trimestres accélérés, puis bilan : crises complètes et erreurs", function() sendToScript("runWitness", {}) end),
+		}, "chronicles-row"),
 		text("Test de sauvegarde : préparer, mettre en pause, sauvegarder, recharger, puis vérifier.", "font-scale-annotation"),
 		hbox({
 			debugButton("Préparer le test de sauvegarde", "Lance une crise si besoin et note l'empreinte de l'état", function() sendToScript("prepareSaveTest", {}) end),

@@ -24,12 +24,12 @@ return function(test, check, eq)
 		local m = Mock.new()
 		m.update(0.5)
 		local expected = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
-			"prepareSaveTest", "checkSaveTest" }
+			"prepareSaveTest", "checkSaveTest", "runWitness" }
 		eq(#m.state.subs, #expected, "nombre d'abonnements")
 		for i, name in ipairs(expected) do eq(m.state.subs[i], name, "abonnement " .. i) end
 		local s = m.state:get()
 		eq(s.version, 1, "version")
-		eq(s.subscriptions, 2, "version des abonnements")
+		eq(s.subscriptions, 3, "version des abonnements")
 		eq(s.lastQuarter, m.quarterIndex(), "trimestre initial")
 		check(m.hasLog("[chronicles] état initial créé"), "log de l'état initial absent")
 		m.update(0.5)
@@ -38,24 +38,32 @@ return function(test, check, eq)
 	end)
 
 	test("Script : réabonnement d'une ancienne sauvegarde", function()
-		local m = Mock.new()
-		m.update(0.5) -- état créé
-		local old = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest" }
-		local s = m.state:get()
-		s.subscriptions = nil -- sauvegarde d'avant la version 2
-		m.state:set(s)
-		m.state.subs = {}
-		for _, name in ipairs(old) do m.state:subscribeToEvent(name) end
-		m.update(0.5)
-		-- anciens abonnements vidés d'abord : un doublon ferait traiter chaque clic deux fois
-		eq(#m.state.subs, 8, "tous les noms réabonnés, sans doublon")
-		local seen = {}
-		for _, name in ipairs(m.state.subs) do seen[name] = true end
-		for _, name in ipairs({ "prepareSaveTest", "checkSaveTest" }) do check(seen[name], "abonnement manquant : " .. name) end
-		eq(m.state:get().subscriptions, 2, "version des abonnements")
-		m.update(0.5)
-		eq(#m.state.subs, 8, "pas de nouvel abonnement au deuxième update")
-		eq(#m.errorLogs(), 0, "erreurs journalisées")
+		local oldNames = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest" }
+		local v2Names = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
+			"prepareSaveTest", "checkSaveTest" }
+		-- version d'origine (aucune marque) puis version 2 : les deux doivent passer à la version 3
+		for _, cas in ipairs({ { nil, oldNames }, { 2, v2Names } }) do
+			local m = Mock.new()
+			m.update(0.5) -- état créé
+			local s = m.state:get()
+			s.subscriptions = cas[1]
+			m.state:set(s)
+			m.state.subs = {}
+			for _, name in ipairs(cas[2]) do m.state:subscribeToEvent(name) end
+			m.update(0.5)
+			local label = "sauvegarde v" .. tostring(cas[1] or 1)
+			-- anciens abonnements vidés d'abord : un doublon ferait traiter chaque clic deux fois
+			eq(#m.state.subs, 9, label .. " : tous les noms réabonnés, sans doublon")
+			local seen = {}
+			for _, name in ipairs(m.state.subs) do seen[name] = true end
+			for _, name in ipairs({ "prepareSaveTest", "checkSaveTest", "runWitness" }) do
+				check(seen[name], label .. " : abonnement manquant : " .. name)
+			end
+			eq(m.state:get().subscriptions, 3, label .. " : version des abonnements")
+			m.update(0.5)
+			eq(#m.state.subs, 9, label .. " : pas de nouvel abonnement au deuxième update")
+			eq(#m.errorLogs(), 0, "erreurs journalisées")
+		end
 	end)
 
 	test("Script : trimestre traité", function()
@@ -160,11 +168,11 @@ return function(test, check, eq)
 		local _, fin = m.hasLog("AUTOTEST fin : ")
 		check(fin, "fin de l'autotest absente")
 		local ok, ko = fin:match("AUTOTEST fin : (%d+) OK, (%d+) ÉCHEC")
-		check(ok and tonumber(ok) >= 5, "moins de 5 OK : " .. tostring(fin))
+		check(ok and tonumber(ok) >= 6, "moins de 6 OK : " .. tostring(fin))
 		eq(tonumber(ko), 0, "échecs de l'autotest : " .. tostring(fin))
 		for _, name in ipairs({ "Productivité appliquée", "Cycle complet d'une crise",
 			"Retour exact à la normale", "Industries du joueur intactes", "Tout rétablir",
-			"Coût d'un trimestre" }) do
+			"Industrie disparue en cours de crise", "Coût d'un trimestre" }) do
 			check(m.hasLog("TEST " .. name .. " OK"), "ligne manquante ou en échec : " .. name)
 		end
 		eq(m.productivity(JOUEUR), 1.0)
@@ -179,7 +187,7 @@ return function(test, check, eq)
 		check(fin_notifiee, "notification « Autotest terminé » absente")
 	end)
 
-	local LIMITE_PAS = 13 -- 9 pas dans la simulation + 4
+	local LIMITE_PAS = 14 -- 10 pas dans la simulation + 4
 	test("Script : autotest rapide", function()
 		-- en jeu les pas sont rares (2 à 4 s) : l'autotest doit finir en peu de pas
 		local m = boot()
@@ -265,6 +273,78 @@ return function(test, check, eq)
 		m.handle("checkSaveTest")
 		check(m.hasLog("SAUTÉ"), "pas de ligne SAUTÉ")
 		eq(#m.errorLogs(), 0, "erreurs journalisées")
+	end)
+
+	-- partie témoin : 40 trimestres, un toutes les 2 s de jeu ; update(0.5) garde la même date du calendrier
+	local function runWitnessToEnd(m)
+		local updates = 0
+		repeat
+			m.update(0.5)
+			updates = updates + 1
+		until m.hasLog("TEST Partie témoin accélérée") or updates >= 400
+		m.flush()
+		return updates
+	end
+	test("Script : partie témoin accélérée", function()
+		local m = boot()
+		local start = m.state:get().lastQuarter
+		m.handle("runWitness")
+		eq(m.state:get().debug.fastQuarter, true, "trimestre accéléré activé")
+		check(m.state:get().debug.witness, "témoin absent")
+		local updates = runWitnessToEnd(m)
+		check(updates < 400, "partie témoin jamais terminée")
+		local _, line = m.hasLog("TEST Partie témoin accélérée")
+		check(line:find("TEST Partie témoin accélérée (10 ans) OK", 1, true), "bilan en échec : " .. tostring(line))
+		local completed = tonumber(line:match("(%d+) terminée"))
+		check(completed and completed >= 2, "moins de 2 crises terminées : " .. tostring(line))
+		eq(tonumber(line:match("(%d+) erreur")), 0, "erreurs du bilan")
+		check(titled(m, "Partie témoin terminée"), "notification de fin absente")
+		local s = m.state:get()
+		eq(s.debug.fastQuarter, false, "accélération arrêtée")
+		eq(s.debug.witness, nil, "témoin effacé")
+		eq(s.lastQuarter, start + 40, "40 trimestres exactement")
+		eq(#m.errorLogs(), 0, "erreurs journalisées")
+		for _ = 1, 20 do m.update(0.5) end
+		eq(m.state:get().lastQuarter, start + 40, "plus d'avance après le bilan")
+	end)
+
+	test("Script : partie témoin déjà en cours", function()
+		local m = boot()
+		m.handle("runWitness")
+		check(not m.hasLog("déjà en cours"), "message prématuré")
+		m.handle("runWitness")
+		check(m.hasLog("déjà en cours"), "deuxième lancement non refusé")
+		eq(m.state:get().debug.witness.remaining, 40, "compteur intact")
+	end)
+
+	-- Le cœur est chargé par ug_require dans une fermeture du mock : on ne peut pas le remplacer.
+	-- Le moyen le moins bricolé est de corrompre l'état (s.events n'est plus une liste), ce qui fait
+	-- échouer engine.tick pour de vrai (ipairs sur un nombre) ; on le répare ensuite.
+	test("Script : erreur pendant un trimestre", function()
+		local m = boot()
+		local good = m.state:get()
+		local saved = good.events
+		good.events = 42
+		m.state:set(good)
+		m.advanceQuarter()
+		local before = m.state:get().lastQuarter
+		local okCall, err = pcall(m.update, 1)
+		check(okCall, "update a levé une erreur : " .. tostring(err))
+		check(m.hasLog("erreur pendant le trimestre", "error"), "erreur non journalisée")
+		eq(m.state:get().lastQuarter, before + 1, "trimestre marqué traité")
+		local n = #m.errorLogs()
+		m.update(1)
+		m.update(1)
+		eq(#m.errorLogs(), n, "pas de rebouclage sur la même erreur")
+		-- panne retirée : le trimestre suivant se passe normalement
+		local fixed = m.state:get()
+		fixed.events = saved
+		m.state:set(fixed)
+		m.advanceQuarter()
+		m.update(1)
+		eq(#m.errorLogs(), n, "nouvelle erreur après réparation")
+		eq(m.state:get().lastQuarter, before + 2, "trimestre suivant traité")
+		check(m.hasLog("trimestre "), "journal de trimestre absent")
 	end)
 
 	test("Script : trimestre accéléré", function()

@@ -12,6 +12,7 @@ https://claude.ai/artifact/63oDXrhzXPQpcaojUMXdo8.
 - `notes/tf3-api.md` : API du jeu relevée dans les définitions Teal et les scripts de base.
 - `notes/environnement.md` : chemins (stdout.txt, staging, sauvegardes) et outils.
 - `notes/journal-de-bord.md` : décisions, état d'avancement, ce qui reste à vérifier en jeu.
+- `notes/procedure-essai.md` : la procédure d'essai en jeu (autotest, sauvegarde, partie témoin, retrait).
 
 ## Structure
 

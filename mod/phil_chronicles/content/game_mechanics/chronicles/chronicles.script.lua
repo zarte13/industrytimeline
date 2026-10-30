@@ -5,15 +5,20 @@
 local MOD = "phil_chronicles::/"
 local EVENT_ID = "PhilChronicles"
 local EVENT_NAMES = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
-	"prepareSaveTest", "checkSaveTest" }
+	"prepareSaveTest", "checkSaveTest", "runWitness" }
 -- à augmenter quand EVENT_NAMES change : les abonnements sont gardés dans la sauvegarde
-local SUBSCRIPTIONS_VERSION = 2
+local SUBSCRIPTIONS_VERSION = 3
 local NOTIFICATION_TYPE = "phil_chronicles::/game_mechanics/chronicles/chronicles_notification.script"
 
 local REASSERT_SECONDS = 10.0 -- le script des travailleurs du jeu peut réécrire la productivité
 local FAST_QUARTER_SECONDS = 5.0
 local SELFTEST_POLLS = 20 -- en jeu, le script reçoit un pas toutes les 2 à 4 secondes environ
-local COST_LIMIT_MS = 50 -- seuil provisoire du coût d'un trimestre, à revoir après la mesure en jeu
+local COST_LIMIT_MS = 50 -- mesuré en jeu : 1,0 ms pour 22 industries et 35 villes (v6)
+local GHOST_ENTITY = 2147480000 -- entité qui n'existe pas, pour simuler une industrie disparue
+-- partie témoin accélérée : 10 ans = 40 trimestres, au moins 2 crises complètes attendues
+local WITNESS_QUARTERS = 40
+local WITNESS_QUARTER_SECONDS = 2.0
+local WITNESS_MIN_COMPLETED = 2
 
 local engine, journal, world_reader, effects
 
@@ -252,7 +257,7 @@ local function stepSelfTest(s)
 		local ev = engine.forceEvent(s, world, { industryId = t.industry })
 		if ev == nil then
 			report("Tout rétablir", false, "crise refusée sur l'industrie de l'autotest")
-			t.step = "cost"
+			t.step = "vanish"
 		else
 			applyResult(s, world, engine.nextPhase(s, world))
 			t.step, t.polls = "resetApplied", 0
@@ -275,12 +280,35 @@ local function stepSelfTest(s)
 		if (near(actual, t.before) and #s.events == 0) or t.polls >= SELFTEST_POLLS then
 			report("Tout rétablir", near(actual, t.before) and #s.events == 0,
 				"avant " .. tostring(t.before) .. ", relue " .. tostring(actual) .. ", " .. #s.events .. " événement(s)")
-			t.step = "cost"
+			t.step = "vanish"
 		else
 			t.polls = t.polls + 1
 		end
 
 	-- coût d'un trimestre : lecture du monde + tick du cœur sur une copie de l'état, au trimestre suivant
+	-- industrie disparue en pleine crise : simulée sur une copie de l'état avec une entité qui n'existe pas,
+	-- pour ne rien démolir dans la partie (même chemin qu'une industrie rasée ou fermée par le jeu)
+	elseif t.step == "vanish" then
+		local okRun, err = pcall(function()
+			local copy = deepCopy(s)
+			local w = world_reader.read()
+			local ev, why = engine.forceEvent(copy, w, { industryId = t.industry })
+			if ev == nil then error("crise refusée : " .. tostring(why)) end
+			ev.industries[#ev.industries + 1] = GHOST_ENTITY
+			copy.baseProductivity[tostring(GHOST_ENTITY)] = 1.0
+			effects.apply({ [GHOST_ENTITY] = 0.6 }) -- l'adaptateur doit ignorer une entité absente
+			local q = engine.quarterIndex(w.year, w.month) + (s.debug.quarterOffset or 0) + 1
+			w.year, w.month = math.floor(q / 4), (q % 4) * 3 + 1
+			engine.tick(copy, w, { frequency = 0, cooldown = 4 })
+			for __, id in ipairs(ev.industries) do
+				if id == GHOST_ENTITY then error("industrie disparue gardée dans l'événement") end
+			end
+			if copy.baseProductivity[tostring(GHOST_ENTITY)] ~= nil then error("productivité de base gardée") end
+			if ev.phase == "rumor" then error("l'événement n'a pas continué son cycle") end
+		end)
+		report("Industrie disparue en cours de crise", okRun, tostring(err))
+		t.step = "cost"
+
 	elseif t.step == "cost" then
 		if os == nil or os.clock == nil then
 			say("TEST Coût d'un trimestre SAUTÉ (os.clock indisponible)")
@@ -312,6 +340,31 @@ local function stepSelfTest(s)
 		selftest = nil
 	end
 	return true
+end
+
+-- ---------------------------------------------------------------- partie témoin accélérée
+
+-- compte les trimestres de la partie témoin ; au bout de WITNESS_QUARTERS, bilan et retour au rythme normal
+local function stepWitness(s, processed)
+	local w = s.debug.witness
+	if w == nil then
+		return
+	end
+	w.remaining = w.remaining - processed
+	if w.remaining > 0 then
+		return
+	end
+	local launched, completed = s.nextEventId - w.firstEventId, 0
+	for __, ev in ipairs(s.events) do
+		if ev.id >= w.firstEventId and ev.phase == "done" then completed = completed + 1 end
+	end
+	local ok = completed >= WITNESS_MIN_COMPLETED and w.errors == 0
+	local summary = launched .. " crise(s) lancée(s), " .. completed .. " terminée(s) de la rumeur à la reprise, " ..
+		w.errors .. " erreur(s)"
+	say("TEST Partie témoin accélérée (10 ans)" .. (ok and " OK " or " ÉCHEC ") .. summary)
+	notify({ kind = ok and "done" or "announce", title = "Partie témoin terminée", text = summary })
+	s.debug.witness = nil
+	s.debug.fastQuarter = false
 end
 
 -- ---------------------------------------------------------------- débogage
@@ -382,6 +435,15 @@ local function handleDebug(s, name, param)
 		notify({ kind = ok and "done" or "announce", title = "Test de sauvegarde",
 			text = ok and "OK : même état après rechargement" or "ÉCHEC (détail dans stdout.txt)" })
 		s.debug.saveCheck = nil
+	elseif name == "runWitness" then
+		if s.debug.witness ~= nil then
+			say("partie témoin déjà en cours : " .. s.debug.witness.remaining .. " trimestre(s) restant(s)")
+			return
+		end
+		s.debug.witness = { remaining = WITNESS_QUARTERS, firstEventId = s.nextEventId, errors = 0 }
+		s.debug.fastQuarter = true
+		say("TÉMOIN début : " .. WITNESS_QUARTERS .. " trimestres accélérés, un toutes les " ..
+			WITNESS_QUARTER_SECONDS .. " s de jeu (la date du mod avance de 10 ans sur celle du jeu)")
 	elseif name == "runSelfTest" then
 		selftest = { step = "start", wait = 0, results = {} }
 		say("AUTOTEST début")
@@ -418,7 +480,8 @@ local script = {
 		if dt ~= nil and dt > 0 then
 			if s.debug.fastQuarter then
 				clock.fast = clock.fast + dt
-				if clock.fast >= FAST_QUARTER_SECONDS then
+				local interval = s.debug.witness ~= nil and WITNESS_QUARTER_SECONDS or FAST_QUARTER_SECONDS
+				if clock.fast >= interval then
 					clock.fast = 0.0
 					s.debug.quarterOffset = s.debug.quarterOffset + 1
 					changed = true
@@ -429,11 +492,21 @@ local script = {
 			local quarter = engine.quarterIndex(year, month) + s.debug.quarterOffset
 			if s.lastQuarter == nil or quarter ~= s.lastQuarter then
 				local world = readWorld(s)
-				local result = engine.tick(s, world, {})
-				applyResult(s, world, result)
-				if result.processed > 0 then
-					say("trimestre " .. world.year .. "-T" .. (math.floor((world.month - 1) / 3) + 1) ..
-						" : " .. #s.events .. " événement(s), " .. #result.notifications .. " notification(s)")
+				local ok, result = pcall(engine.tick, s, world, {})
+				if ok then
+					applyResult(s, world, result)
+					if result.processed > 0 then
+						say("trimestre " .. world.year .. "-T" .. (math.floor((world.month - 1) / 3) + 1) ..
+							" : " .. #s.events .. " événement(s), " .. #result.notifications .. " notification(s)")
+						stepWitness(s, result.processed)
+					end
+				else
+					-- trimestre marqué traité pour ne pas reboucler sur la même erreur à chaque pas
+					log.error("[chronicles] erreur pendant le trimestre", tostring(result))
+					s.lastQuarter = quarter
+					if s.debug.witness ~= nil then
+						s.debug.witness.errors = s.debug.witness.errors + 1
+					end
 				end
 				changed = true
 			end

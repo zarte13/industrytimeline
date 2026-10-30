@@ -191,6 +191,19 @@ TEST Sauvegarder en pleine crise OK
 - Coût : 1,0 ms par trimestre sur cette carte, très loin du seuil de 50 ms.
 - Doc « Moteur d'événements » : 12 cas sur 23 à OK.
 
-**Restent pour clore la phase 1** : retirer le mod (Tout rétablir, sauvegarder, désactiver, recharger sans le
+## 2026-10-30 — v7 : dernières automatisations de la phase 1
+
+- Autotest : « Industrie disparue en cours de crise », simulée sur une copie de l'état avec une entité
+  inexistante (2147480000) : l'adaptateur l'ignore, le cœur la retire, l'événement continue. Rien n'est
+  démoli dans la partie. Une fermeture décidée par le jeu suit le même chemin.
+- « Partie témoin accélérée (10 ans) » : 40 trimestres accélérés (2 s de jeu chacun), puis bilan
+  `TEST Partie témoin accélérée` (OK si au moins 2 crises complètes et 0 erreur) et notification.
+  La date du mod garde ensuite 10 ans d'avance : sauvegarde de test seulement.
+- Le trimestre du script de jeu tourne sous `pcall` : une erreur du cœur est journalisée
+  (`log.error`), le trimestre est marqué traité (pas de boucle), et compte comme erreur de la partie témoin.
+- Abonnements en version 3. Tests N1 : 35 verts (sous-agent Sonnet).
+- `notes/procedure-essai.md` : la procédure complète d'essai en jeu.
+
+**Restent pour clore la phase 1** (voir la procédure) : retirer le mod (Tout rétablir, sauvegarder, désactiver, recharger sans le
 mod), industrie rasée en pleine crise, fermeture décidée par le jeu, industrie du joueur en jeu (il faut une
 partie où tu possèdes une industrie), partie témoin de 10 ans avec au moins deux crises complètes.
