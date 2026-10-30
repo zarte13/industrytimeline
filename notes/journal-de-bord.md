@@ -98,4 +98,27 @@ sans `data()`, vérifié : l'ancienne forme fait 10 échecs. 27 tests verts.
 Restent : productivité appliquée, cycle complet, retour exact, notification affichée (point 5),
 ligne « AUTOTEST fin ».
 
-**Prochaine étape** : relancer l'autotest et laisser la partie tourner (non en pause) environ 30 s avant de quitter.
+## 2026-10-30 — essai v4 bis, correctif v5 (autotest plus rapide)
+
+**Confirmé en jeu** :
+
+- **TEST Productivité appliquée OK** : la commande `makeStockListSetModifiersCmd` du mod modifie bien
+  la productivité réelle (60 % relu sur le camp de bûcherons).
+- La crise passe par le creux et la reprise jusqu'à « terminée » (phases avancées par l'autotest).
+- Aucune erreur du mod dans `stdout.txt`.
+
+**Pas encore vu** : la partie a été quittée 5 s après la fin de la crise, avant la relecture du
+« Retour exact à la normale » et la ligne « AUTOTEST fin ».
+
+**Mesure** : en jeu, le script de jeu reçoit un pas toutes les 2 à 4 s environ (13 s pour 4 pas entre
+l'annonce et la première relecture). Les attentes fixes en nombre de pas rendaient l'autotest long.
+
+**Correctif v5** :
+
+- L'autotest relit la productivité à chaque pas et passe à la suite dès qu'elle est bonne
+  (au plus 20 pas). Toutes les phases restantes sont avancées dans le même pas.
+- Une notification « Autotest terminé : N OK, M ÉCHEC » s'affiche à la fin : elle dit quand quitter
+  et vérifie au passage l'affichage du type de notification du mod (point 5).
+- Tests N1 : notification de fin, et « autotest rapide » (au plus 10 pas). 28 tests verts.
+
+**Prochaine étape** : relancer l'autotest et attendre la notification « Autotest terminé » avant de quitter.

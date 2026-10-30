@@ -9,6 +9,7 @@ local NOTIFICATION_TYPE = "phil_chronicles::/game_mechanics/chronicles/chronicle
 
 local REASSERT_SECONDS = 10.0 -- le script des travailleurs du jeu peut réécrire la productivité
 local FAST_QUARTER_SECONDS = 5.0
+local SELFTEST_POLLS = 20 -- en jeu, le script reçoit un pas toutes les 2 à 4 secondes environ
 
 local engine, journal, world_reader, effects
 
@@ -96,7 +97,7 @@ local function readWorld(s)
 end
 
 local function notify(n)
-	local title = n.kind == "announce" and "Crise annoncée" or "Reprise"
+	local title = n.title or (n.kind == "announce" and "Crise annoncée" or "Reprise")
 	local notification = {
 		type = NOTIFICATION_TYPE,
 		params = { kind = n.kind, title = title, description = n.text },
@@ -182,44 +183,58 @@ local function stepSelfTest(s)
 		t.event = ev.id
 		say("autotest sur " .. candidate.name .. ", productivité " .. tostring(t.before))
 		applyResult(s, world, engine.nextPhase(s, world)) -- rumeur -> annonce
-		t.step, t.wait = "announced", 3
+		t.step, t.polls = "announced", 0
 
+	-- les commandes s'appliquent quelques pas plus tard : on relit à chaque pas, au plus SELFTEST_POLLS fois
 	elseif t.step == "announced" then
 		local target = engine.targets(s)[t.industry]
 		local actual = world_reader.getProductivity(t.industry)
-		report("Productivité appliquée", near(actual, target),
-			"visée " .. tostring(target) .. ", relue " .. tostring(actual))
-		t.step, t.guard = "finishing", 0
+		if near(actual, target) or t.polls >= SELFTEST_POLLS then
+			report("Productivité appliquée", near(actual, target),
+				"visée " .. tostring(target) .. ", relue " .. tostring(actual) .. " après " .. t.polls .. " pas")
+			t.step = "finishing"
+		else
+			t.polls = t.polls + 1
+		end
 
 	elseif t.step == "finishing" then
-		local ev = nil
-		for __, e in ipairs(s.events) do
-			if e.id == t.event then ev = e end
-		end
-		if ev ~= nil and ev.phase ~= "done" and t.guard < 12 then
-			t.guard = t.guard + 1
-			applyResult(s, world, engine.nextPhase(s, world))
-			t.wait = 1
-		else
-			report("Cycle complet d'une crise", ev ~= nil and ev.phase == "done",
-				"phase " .. tostring(ev and ev.phase) .. " après " .. t.guard .. " étapes")
-			t.step, t.wait = "restored", 3
-		end
+		-- toutes les phases restantes dans le même pas : nextPhase ne dépend pas des commandes
+		local ev, steps = nil, 0
+		repeat
+			ev = nil
+			for __, e in ipairs(s.events) do
+				if e.id == t.event then ev = e end
+			end
+			if ev ~= nil and ev.phase ~= "done" then
+				applyResult(s, world, engine.nextPhase(s, world))
+				steps = steps + 1
+			end
+		until ev == nil or ev.phase == "done" or steps >= 12
+		report("Cycle complet d'une crise", ev ~= nil and ev.phase == "done",
+			"phase " .. tostring(ev and ev.phase) .. " après " .. steps .. " étapes")
+		t.step, t.polls = "restored", 0
 
 	elseif t.step == "restored" then
 		local actual = world_reader.getProductivity(t.industry)
-		report("Retour exact à la normale", near(actual, t.before),
-			"avant " .. tostring(t.before) .. ", relue " .. tostring(actual))
-		local __, hash = dump(s)
-		say("TEST empreinte de l'état " .. hash .. " (sauvegarder, recharger, « Écrire l'état » doit redonner la même)")
-		t.step = "end"
+		if near(actual, t.before) or t.polls >= SELFTEST_POLLS then
+			report("Retour exact à la normale", near(actual, t.before),
+				"avant " .. tostring(t.before) .. ", relue " .. tostring(actual) .. " après " .. t.polls .. " pas")
+			local __, hash = dump(s)
+			say("TEST empreinte de l'état " .. hash .. " (sauvegarder, recharger, « Écrire l'état » doit redonner la même)")
+			t.step = "end"
+		else
+			t.polls = t.polls + 1
+		end
 
 	else
 		local ok, ko = 0, 0
 		for __, r in ipairs(t.results) do
 			if r then ok = ok + 1 else ko = ko + 1 end
 		end
-		say("AUTOTEST fin : " .. ok .. " OK, " .. ko .. " ÉCHEC")
+		local summary = ok .. " OK, " .. ko .. " ÉCHEC"
+		say("AUTOTEST fin : " .. summary)
+		-- la notification dit au joueur qu'il peut quitter, et vérifie l'affichage du type de notification
+		notify({ kind = ko == 0 and "done" or "announce", title = "Autotest terminé", text = summary .. " (détail dans stdout.txt)" })
 		selftest = nil
 	end
 	return true

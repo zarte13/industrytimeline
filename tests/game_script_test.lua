@@ -145,6 +145,26 @@ return function(test, check, eq)
 		end
 		eq(m.productivity(JOUEUR), 1.0)
 		eq(#m.errorLogs(), 0, "erreurs journalisées")
+		-- la notification de fin dit au joueur qu'il peut quitter la partie
+		local fin_notifiee = false
+		for _, n in ipairs(m.notifications) do
+			if n.params.title == "Autotest terminé" and n.params.description:find("0 ÉCHEC", 1, true) then
+				fin_notifiee = true
+			end
+		end
+		check(fin_notifiee, "notification « Autotest terminé » absente")
+	end)
+
+	test("Script : autotest rapide", function()
+		-- en jeu les pas sont rares (2 à 4 s) : l'autotest doit finir en peu de pas
+		local m = boot()
+		m.handle("runSelfTest")
+		local pas = 0
+		repeat
+			m.update(0.2)
+			pas = pas + 1
+		until m.hasLog("AUTOTEST fin : ") or pas > 40
+		check(pas <= 10, "autotest trop long : " .. pas .. " pas")
 	end)
 
 	local function lastHash(m)
