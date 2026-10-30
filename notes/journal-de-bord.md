@@ -169,5 +169,28 @@ deux crises de la rumeur à la reprise, sans erreur dans `stdout.txt`.
   Le script vide les abonnements (`subscribeToNoEvents`) et se réabonne quand la version monte.
 - Tests N1 : 32 verts (sous-agent Sonnet pour les nouveaux cas, puis correctif des doublons d'abonnement).
 
-**Prochaine étape** : sur `Testgame.sav`, « Lancer l'autotest » (attendre la notification), puis le test
-de sauvegarde. Restent manuels : industrie rasée en pleine crise, fermeture par le jeu, partie témoin de 10 ans.
+## 2026-10-30 — essai v6 : autotest 5 OK, sauvegarde OK
+
+`stdout.txt`, sessions de 20:09 et 20:11, **aucune erreur** :
+
+```
+TEST Productivité appliquée OK
+TEST Cycle complet d'une crise OK
+TEST Retour exact à la normale OK
+TEST Tout rétablir OK
+TEST Coût d'un trimestre OK
+mesure : un trimestre coûte 1.0 ms pour 22 industries et 35 villes
+AUTOTEST fin : 5 OK, 0 ÉCHEC
+test de sauvegarde préparé, empreinte 89da6c09   (crise de l'agriculture à Yvetot, annonce)
+-- sauvegarde, rechargement --
+TEST Sauvegarder en pleine crise OK
+```
+
+- Le rechargement n'a pas recréé l'état (pas de « état initial créé ») : l'état du mod vit bien dans la sauvegarde.
+- Les nouveaux boutons ont fonctionné sur une partie déjà abonnée : le réabonnement versionné marche.
+- Coût : 1,0 ms par trimestre sur cette carte, très loin du seuil de 50 ms.
+- Doc « Moteur d'événements » : 12 cas sur 23 à OK.
+
+**Restent pour clore la phase 1** : retirer le mod (Tout rétablir, sauvegarder, désactiver, recharger sans le
+mod), industrie rasée en pleine crise, fermeture décidée par le jeu, industrie du joueur en jeu (il faut une
+partie où tu possèdes une industrie), partie témoin de 10 ans avec au moins deux crises complètes.
