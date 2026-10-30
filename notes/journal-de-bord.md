@@ -204,6 +204,32 @@ TEST Sauvegarder en pleine crise OK
 - Abonnements en version 3. Tests N1 : 35 verts (sous-agent Sonnet).
 - `notes/procedure-essai.md` : la procédure complète d'essai en jeu.
 
+## 2026-10-30 — essai v7 et correctifs v8
+
+**Confirmé en jeu (v7)**, aucune erreur du mod :
+
+- Autotest **6 OK, 0 ÉCHEC** (dont « Industrie disparue en cours de crise »). Coût mesuré 0,0 ms :
+  `os.clock` est trop grossier à cette échelle, le trimestre coûte moins d'une milliseconde.
+- **Partie témoin accélérée (10 ans) OK** : 4 crises lancées, 4 terminées de la rumeur à la reprise, 0 erreur.
+- **Notifications affichées** (capture de Philippe : « Reprise à Evreux : le sciage se redresse… »). Point 5 confirmé.
+- Journal et bloc d'industrie lisibles. Les 5 crises simultanées de la capture venaient de 5 clics
+  « Forcer un événement », pas du conteur.
+
+**Défauts vus sur les captures, corrigés en v8**
+
+- Noms bruts dans le journal (« Crise de fishing_grounds », « oil_platform », « bricks_works ») : le catalogue
+  avait une liste devinée. Il a maintenant les 33 types réels de TF3 ; un type inconnu (autre mod) devient
+  « l'industrie ». Test N1 « Noms des 33 types d'industrie du jeu ».
+- Élision devant toutes les voyelles accentuées en UTF-8 (« d'Évreux », « d'Île-Rousse »).
+- Onglet Économie : la ligne d'exemple statique du prototype est remplacée par les manchettes réelles
+  (`state.headlines`, écrites par le script de jeu).
+- Tests N1 : 36 verts. Doc « Moteur d'événements » : 13 cas sur 23 à OK.
+
+**Bilan de la phase 1 au 2026-10-30** : toutes les tâches du plan sont faites et tous les cas automatisables
+passent, hors jeu et en jeu. Reste un essai manuel de 3 minutes, « Retirer le mod proprement ».
+Hors critère mais recommandés avant la phase 2 : une vraie partie de 10 ans pour juger le rythme, et
+une partie avec une industrie du joueur.
+
 **Restent pour clore la phase 1** (voir la procédure) : retirer le mod (Tout rétablir, sauvegarder, désactiver, recharger sans le
 mod), industrie rasée en pleine crise, fermeture décidée par le jeu, industrie du joueur en jeu (il faut une
 partie où tu possèdes une industrie), partie témoin de 10 ans avec au moins deux crises complètes.

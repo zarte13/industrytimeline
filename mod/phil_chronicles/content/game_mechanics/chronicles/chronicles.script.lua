@@ -134,6 +134,17 @@ local function notify(n)
 	api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", "Notifications", "add", notification))
 end
 
+-- textes lus par l'interface : lignes du Journal, manchettes des événements en cours (onglet Économie)
+local function refreshJournal(s, world)
+	s.journal = journal.describe(s, world)
+	s.headlines = {}
+	for __, ev in ipairs(s.events) do
+		if ev.phase ~= "done" then
+			s.headlines[#s.headlines + 1] = journal.headline(ev)
+		end
+	end
+end
+
 -- applique un résultat du cœur : cibles, notifications, log, texte du journal
 local function applyResult(s, world, result)
 	local sent = effects.apply(result.targets)
@@ -143,7 +154,7 @@ local function applyResult(s, world, result)
 	for __, line in ipairs(result.log) do
 		say(line)
 	end
-	s.journal = journal.describe(s, world)
+	refreshJournal(s, world)
 	if sent > 0 and s.debug.verbose then
 		say(tostring(sent) .. " commande(s) de productivité")
 	end
@@ -269,7 +280,7 @@ local function stepSelfTest(s)
 		if near(actual, target) or t.polls >= SELFTEST_POLLS then
 			say("autotest : « Tout rétablir » efface aussi les autres événements en cours")
 			effects.apply(engine.resetAll(s))
-			s.journal = journal.describe(s, world)
+			refreshJournal(s, world)
 			t.step, t.polls = "resetDone", 0
 		else
 			t.polls = t.polls + 1
@@ -379,7 +390,7 @@ local function handleDebug(s, name, param)
 		else
 			say("crise refusée : " .. tostring(why))
 		end
-		s.journal = journal.describe(s, world)
+		refreshJournal(s, world)
 	elseif name == "nextPhase" then
 		local world = readWorld(s)
 		applyResult(s, world, engine.nextPhase(s, world))
@@ -393,7 +404,7 @@ local function handleDebug(s, name, param)
 		local world = readWorld(s)
 		local targets = engine.resetAll(s)
 		local sent = effects.apply(targets)
-		s.journal = journal.describe(s, world)
+		refreshJournal(s, world)
 		say("tout rétabli (" .. sent .. " commande(s))")
 	-- test « Sauvegarder en pleine crise », en deux temps autour d'une sauvegarde et d'un rechargement
 	elseif name == "prepareSaveTest" then

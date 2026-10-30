@@ -31,9 +31,15 @@ local function remplit(modele, vars)
 end
 
 -- « de Valmont » / « d'Alba »
+-- voyelles majuscules accentuées en UTF-8 (2 octets chacune)
+local VOYELLES_ACCENTUEES = { "À", "Â", "Ä", "É", "È", "Ê", "Ë", "Î", "Ï", "Ô", "Ö", "Ù", "Û", "Ü", "Œ", "Æ" }
+
 local function deVille(name)
-	local c = name:sub(1, 1)
-	if c:find("[AEIOUYHaeiouyh]") or name:sub(1, 2) == "É" then return "d'" .. name end
+	if name:sub(1, 1):find("[AEIOUYHaeiouyh]") then return "d'" .. name end
+	local debut = name:sub(1, 2)
+	for _, v in ipairs(VOYELLES_ACCENTUEES) do
+		if debut == v then return "d'" .. name end
+	end
 	return "de " .. name
 end
 

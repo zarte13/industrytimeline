@@ -39,6 +39,7 @@ end
 
 local record ChroniclesState
 	journal : {string}
+	headlines : {string}
 	events : {ChroniclesEvent}
 	debug : ChroniclesDebug
 end
@@ -187,11 +188,24 @@ local EconomyTab = react.RegisterRecipe("ChroniclesEconomyTab", function() : Tre
 		-- STOCK_LIST ne peut pas être parcouru : on compte les entités INDUSTRY (comme statistic_industries.tl)
 		return #api.engine.getEntitiesWithComponent(api.type.ComponentType.INDUSTRY)
 	end)
-	return vbox({
-		text("Événements en cours", "font-scale-headline"),
-		text("Crise de l'acier · Valmont · le creux (exemple statique)"),
-		text("Donnée réelle de la partie : " .. tostring(countState:old()) .. " industries sur la carte."),
-	}, "chronicles-tab")
+	-- manchettes écrites par le script de jeu (core/journal.lua)
+	local headlinesState = engine_react_util.useStepStateTimer(function() : {string}
+		local state = readGameState()
+		if state == nil or state.headlines == nil then
+			return {}
+		end
+		return state.headlines
+	end)
+	local children : {TreeNodeId} = { text("Événements en cours", "font-scale-headline") }
+	local headlines = headlinesState:old()
+	if #headlines == 0 then
+		children[#children + 1] = text("Aucun événement en cours.")
+	end
+	for __, line in ipairs(headlines) do
+		children[#children + 1] = text(line)
+	end
+	children[#children + 1] = text(tostring(countState:old()) .. " industries sur la carte.", "font-scale-annotation")
+	return vbox(children, "chronicles-tab")
 end)
 
 -- Livraisons à temps sur un an, toutes villes : calculées dans l'état « parallèle »,

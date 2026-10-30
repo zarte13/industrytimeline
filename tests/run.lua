@@ -321,14 +321,21 @@ test("Journal", function()
 	end
 	for _, p in ipairs({ "rumor", "announce", "trough", "recovery", "done" }) do check(vues[p], "phase non vue : " .. p) end
 	check(mods.journal.notification("rumor", ev):find("Rumeur : l'acier") == nil, "secteur différent")
-	-- exemple du plan et repli sur le type brut
+	-- exemple du plan et repli pour un type inconnu (jamais le nom brut)
 	local modele = { sector = "steel_mill", regionName = "Valmont", multiplier = 1.0, phase = "rumor", quartersInPhase = 0, industries = {} }
 	eq(mods.journal.notification("rumor", modele), "Rumeur : l'acier de Valmont inquiète")
 	modele.phase, modele.troughLength, modele.quartersInPhase = "trough", 3, 1
 	eq(mods.journal.headline(modele), "Crise de l'acier · Valmont · le creux · trimestre 2 sur 3")
 	modele.sector = "sulfur_mine"
-	check(mods.journal.headline(modele):find("sulfur_mine", 1, true), "repli sur le type brut")
+	eq(mods.journal.headline(modele), "Crise de l'industrie · Valmont · le creux · trimestre 2 sur 3")
 	noPlaceholder(mods.journal.headline(modele))
+	-- élision devant une voyelle, accentuée ou non (noms de villes en UTF-8, comme dans le jeu)
+	modele.sector, modele.phase = "steel_mill", "rumor"
+	for ville, attendu in pairs({ ["Évreux"] = "d'Évreux", ["Île-Rousse"] = "d'Île-Rousse", ["Œuilly"] = "d'Œuilly",
+		["Orléans"] = "d'Orléans", ["Valmont"] = "de Valmont" }) do
+		modele.regionName = ville
+		eq(mods.journal.notification("rumor", modele), "Rumeur : l'acier " .. attendu .. " inquiète")
+	end
 	check(#mods.journal.describe(engine.newState(1), world) == 1, "journal vide d'état")
 end)
 
@@ -389,6 +396,25 @@ test("Notifications", function()
 end)
 
 -- Script de jeu avec API simulée (N2)
+-- En jeu (v7), « Crise de fishing_grounds » : tous les types de TF3 doivent avoir un nom français.
+test("Noms des 33 types d'industrie du jeu", function()
+	local types = { "brewery", "bricks_works", "cement_plant", "chemical_plant", "clay_pit", "coal_mine",
+		"cotton_farm", "dredging_platform", "farm", "fishing_grounds", "food_factory", "forest",
+		"furniture_factory", "glass_works", "iron_ore_mine", "livestock_farm", "machine_factory",
+		"oil_platform", "oil_refinery", "oil_well", "paper_mill", "printing_press", "quarry", "rubber_farm",
+		"sand_excavator", "sand_pit", "saw_mill", "steel_mill", "textile_factory", "tire_factory",
+		"tool_factory", "vehicle_factory", "weaving_mill", "type_d_un_autre_mod" }
+	for _, sectorType in ipairs(types) do
+		local ev = { id = 1, sector = sectorType, regionName = "Valmont", industries = {}, phase = "announce",
+			multiplier = 0.6, quartersInPhase = 0, troughLength = 2 }
+		for _, txt in ipairs({ mods.journal.headline(ev), mods.journal.notification("rumor", ev),
+			mods.journal.notification("announce", ev), mods.journal.notification("recovery", ev) }) do
+			check(not txt:find("_", 1, true), "nom brut dans : " .. txt)
+			noPlaceholder(txt, sectorType)
+		end
+	end
+end)
+
 dofile("tests/game_script_test.lua")(test, check, eq)
 
 -- Exécution
