@@ -121,4 +121,37 @@ l'annonce et la première relecture). Les attentes fixes en nombre de pas rendai
   et vérifie au passage l'affichage du type de notification du mod (point 5).
 - Tests N1 : notification de fin, et « autotest rapide » (au plus 10 pas). 28 tests verts.
 
-**Prochaine étape** : relancer l'autotest et attendre la notification « Autotest terminé » avant de quitter.
+## 2026-10-30 — essai v5 : autotest vert en jeu
+
+`stdout.txt` (partie chargée à 20:01, `Testgame.sav`), en 5 s, sans aucune erreur du mod :
+
+```
+TEST Industries du joueur intactes SAUTÉ (aucune industrie du joueur)
+autotest sur Nogent-sur-Seine Camp de bûcherons, productivité 1
+TEST Productivité appliquée OK
+TEST Cycle complet d'une crise OK
+TEST Retour exact à la normale OK
+TEST empreinte de l'état 41be51c1
+AUTOTEST fin : 3 OK, 0 ÉCHEC
+```
+
+**Cas N2 de la phase 1 : où on en est**
+
+| Cas N2 | Statut |
+|---|---|
+| Cycle complet d'une crise | OK en jeu (v5) |
+| Productivité appliquée | OK en jeu (v5) |
+| Retour exact à la normale | OK en jeu (v5) |
+| Industries du joueur intactes | sauté : `Testgame.sav` n'a pas d'industrie du joueur ; OK hors jeu |
+| Autres modificateurs gardés | `Modifiers` n'a que `productivity` en TF3 : sans objet, la réaffirmation couvre le script des travailleurs |
+| Sauvegarder en pleine crise | à faire : forcer une crise, sauvegarder, recharger, « Écrire l'état » |
+| Retirer le mod proprement | à faire : « Tout rétablir », sauvegarder, désactiver le mod |
+| Industrie disparue en cours de crise | à faire en jeu (OK hors jeu) |
+| Fermeture décidée par le jeu | à faire |
+| Coût d'un trimestre | à faire (pas de mesure du temps dans le script pour l'instant) |
+| Notification affichée | à confirmer par Philippe (la fin de l'autotest en envoie une) |
+
+**Critère de fin de la phase 1** (plan) : les 17 cas passent et une partie témoin de 10 ans montre au moins
+deux crises de la rumeur à la reprise, sans erreur dans `stdout.txt`.
+
+**Prochaine étape** : les cas N2 manuels ci-dessus, puis la partie témoin de 10 ans.
