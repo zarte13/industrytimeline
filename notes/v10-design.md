@@ -1,0 +1,106 @@
+# v10 « ressentie » — conception (phase 1 étendue)
+
+Planifiée avec Philippe le 2026-10-31, après sa partie témoin de 19 ans en v9 : la mécanique tourne
+(9 crises complètes, aucune erreur), mais **on ne ressent rien**.
+
+## Pourquoi rien ne se ressentait (v9)
+
+1. Une seule industrie par crise (région = ville la plus proche, rarement deux industries du même type).
+2. Le conteur ignore le réseau du joueur : la plupart des crises touchent des industries non desservies.
+3. −40 % appliqué sur la productivité bonifiée par les travailleurs (« 1,96 → 1,17 » : toujours au-dessus
+   de la normale) ; et une ligne goulot ne voit pas la baisse.
+4. Aucune conséquence au-delà de la production : ni argent, ni villes, ni chaîne, ni décision.
+
+## Décisions de Philippe
+
+| Sujet | Décision |
+|---|---|
+| Place dans le plan | **Phase 1 étendue** : le MVP n'est fini que quand il se ressent |
+| Crises | touchent **plusieurs industries à la fois** (toute une famille sur une zone) |
+| Grèves | une famille (« toutes les mines ») sur **une grande zone** de plusieurs villes |
+| Booms : cible | des industries sur **des lignes existantes** du joueur |
+| Booms : durée | **selon l'intensité** : court et violent ou long et modéré, tiré au hasard |
+| Booms : nouvelles industries | **la chaîne** (boom pétrolier : puits, puis raffinerie qui en a besoin) ; apparaissent **vite** |
+| Booms : incitations | **villes qui grandissent**, **contrat de boom** (prime + prolongation), **prime en argent** |
+| « Desservie » | **cargo transporté** (production enlevée ou intrants livrés) dans les 4 derniers trimestres |
+| Nouvelles industries non desservies | **2 ans de grâce, puis ultimatum** visible d'1 an, puis fermeture |
+| Rythme | **un grand événement à la fois** : au plus un boom et une crise ou grève en même temps |
+| Vitesse du jeu | tout doit marcher **quelle que soit la vitesse** (simulation et calendrier) |
+
+## Familles d'industries
+
+| Famille | Types TF3 |
+|---|---|
+| Mines et carrières | coal_mine, iron_ore_mine, quarry, clay_pit, sand_pit, sand_excavator |
+| Agriculture et pêche | farm, livestock_farm, cotton_farm, rubber_farm, fishing_grounds |
+| Bois et papier | forest, saw_mill, paper_mill, furniture_factory, printing_press |
+| Pétrole et chimie | oil_well, oil_platform, oil_refinery, chemical_plant, dredging_platform |
+| Métallurgie et mécanique | steel_mill, tool_factory, machine_factory, vehicle_factory |
+| Matériaux | bricks_works, cement_plant, glass_works |
+| Biens de consommation | food_factory, brewery, textile_factory, weaving_mill, tire_factory |
+
+À valider contre les vraies chaînes de cargo du jeu (entrées et sorties de chaque `.con`).
+
+## Événements
+
+| Événement | Cible | Effet | Durée |
+|---|---|---|---|
+| **Grève** | une famille, une grande zone | 10 à 20 % de la productivité **de base** | 1 à 2 trimestres, rumeur 1 trimestre avant |
+| **Crise** | une famille, une grande zone | −50 à −70 % de la base, reprise progressive | 1 à 3 ans |
+| **Boom court** | une industrie desservie + sa chaîne autour | +100 %, nouvelles industries rapides | 2 à 3 ans |
+| **Boom long** | idem | +40 %, nouvelles industries plus lentes | 6 à 10 ans |
+
+- **Zones** : la carte découpée en 4 à 6 grandes zones (groupes de villes voisines), au lieu de la ville la plus proche.
+- **Base** : l'effet se calcule sur la productivité normale (1,0), pas sur le bonus des travailleurs ;
+  à préciser : on neutralise le bonus pendant l'événement, ou on multiplie seulement la part de base.
+- **Garde-fous** gardés : industries du joueur jamais touchées par les crises ou grèves ; reprise garantie ;
+  un seul grand événement de chaque sorte à la fois.
+
+## Cycle d'un boom
+
+1. Le conteur choisit une industrie que le joueur dessert (cargo transporté) ; boom court ou long au hasard.
+2. **Nouvelles industries de la chaîne** autour : dès les premiers trimestres pour un boom court, plus étalées
+   pour un boom long (cargos disponibles à l'époque seulement).
+3. **Contrat de boom** : livrer X % de la production de l'industrie en boom pendant N trimestres → prime,
+   et le boom se prolonge.
+4. **Prime en argent** chaque trimestre tant que l'industrie en boom est desservie.
+5. **Villes proches** : croissance et besoins en hausse pendant le boom.
+6. Chaque nouvelle industrie : 2 ans de grâce ; non desservie à la fin du délai → ultimatum de fermeture
+   d'1 an (compte à rebours du jeu) ; desservie entre-temps → ultimatum levé.
+7. Fin du boom : retour progressif à la base ; les nouvelles industries desservies restent.
+
+## Vitesse du jeu
+
+- **Vitesse de simulation** (×1 à ×4, pause) : sans effet, tout est compté en trimestres du calendrier.
+- **Vitesse du calendrier** : curseur « Vitesse du calendrier » de la fenêtre Météo et heure, multiplicateur
+  (capture de Philippe : 2,00x ; bornes et valeur « figée » à relever). Un trimestre dure plus ou moins de temps de jeu, donc
+  produit et transporte plus ou moins de cargo. Règles :
+  - les objectifs de contrat sont des **pourcentages de la production** sur la période, jamais des tonnes fixes ;
+  - les primes sont **par trimestre**, à l'échelle du revenu (ou proportionnelles au cargo transporté) ;
+  - « desservie » = cargo transporté **> 0** sur les 4 derniers trimestres, indépendant de la durée ;
+  - les durées (grâce, ultimatum, boom) sont en trimestres du calendrier ; l'ultimatum du jeu
+    (`makeIndustrySetDespawnTimeCmd`, en temps de jeu) se calcule avec la durée réelle d'un trimestre.
+- **Calendrier figé** (risque déjà listé dans le plan) : trimestres comptés en temps de jeu écoulé
+  (durée d'un trimestre à la vitesse par défaut), ou événements désactivés.
+- Tests N1 : mêmes scénarios avec des trimestres de durées différentes.
+
+## Inconnues techniques (à lever avant le code)
+
+1. Créer une industrie par script : proposition de construction (`SimpleProposal`, `.con` du type) ;
+   placement valide (collisions, terrain, eau pour les plateformes). Voir comment `industries.script.tl` du
+   jeu fait apparaître ses industries.
+2. Fermer : `makeIndustrySetDespawnTimeCmd(entity, temps)` ; la notification de fermeture du jeu s'affiche-t-elle ?
+3. Savoir si une industrie est desservie : cargo enlevé ou livré par les lignes du joueur (LOG_BOOK,
+   stocks, gares à portée).
+4. Chaînes : entrées et sorties de chaque type d'industrie (règles du `STOCK_LIST`, `.con`).
+5. Argent : commande pour verser une prime au joueur.
+6. Villes : `makeTownSetDevelopmentActiveCmd`, `makeTownUpdateCargoNeedsCmd` (déjà au plan, phase 3).
+7. Durée réelle d'un trimestre : `millisPerDay` selon le curseur « Vitesse du calendrier » (bornes, valeur
+   minimale, calendrier figé ?), et lecture de ce réglage par script.
+8. Pour plus tard (saisons, phase 3) : la fenêtre « Météo et heure » a un cycle météo « Dynamique » ;
+   voir si un script peut lire ou régler la météo.
+
+## Feedback (gardé de la v9)
+
+Chaque nouvelle mécanique écrit dans « Activité du moteur » : zone et industries touchées par une grève,
+industries créées, état « desservie », ultimatums, primes versées, avancement du contrat.
