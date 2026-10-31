@@ -140,8 +140,11 @@ Calendrier figé (0x) : choix ouvert (voir la fin du document).
 
 ## Choix ouverts
 
-- **Calendrier figé (0x)** : les événements s'arrêtent (rien ne se passe tant que le calendrier est figé),
-  ou ils continuent sur le temps de jeu, avec la durée d'un trimestre à la vitesse par défaut.
+- ~~Calendrier figé (0x)~~ **Tranché le 2026-10-31 par Philippe : les événements s'arrêtent.** À 0x
+  (`millisPerDay == 0`), le mod n'accumule plus de temps : aucun trimestre ne passe, aucune phase n'avance,
+  aucune industrie n'apparaît ni ne ferme. Les productivités en cours restent appliquées (réaffirmation
+  maintenue). La ligne du conteur affiche « Calendrier figé : événements en pause ». Tout reprend là où
+  c'était quand le calendrier repart.
 
 ## Feedback (gardé de la v9)
 
