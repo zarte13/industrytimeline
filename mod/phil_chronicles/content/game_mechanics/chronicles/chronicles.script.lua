@@ -5,9 +5,10 @@
 local MOD = "phil_chronicles::/"
 local EVENT_ID = "PhilChronicles"
 local EVENT_NAMES = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
-	"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications" }
+	"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications",
+	"probeSpawn", "probeUltimatum", "probeCounters", "probeTown", "probeCalendar" }
 -- à augmenter quand EVENT_NAMES change : les abonnements sont gardés dans la sauvegarde
-local SUBSCRIPTIONS_VERSION = 4
+local SUBSCRIPTIONS_VERSION = 5
 local ACTIVITY_MAX = 40 -- lignes gardées dans « Activité du moteur »
 local NOTIFICATION_TITLES = {
 	rumor = "Rumeur", announce = "Crise annoncée", trough = "Creux de la crise",
@@ -25,7 +26,7 @@ local WITNESS_QUARTERS = 40
 local WITNESS_QUARTER_SECONDS = 2.0
 local WITNESS_MIN_COMPLETED = 2
 
-local engine, journal, world_reader, effects
+local engine, journal, world_reader, effects, probes
 
 local function loadModules()
 	if engine ~= nil then
@@ -44,6 +45,7 @@ local function loadModules()
 	})
 	world_reader = load("adapters/world_reader.lua")
 	effects = load("adapters/effects.lua")
+	probes = load("adapters/probes.lua") -- étape 0 de la v10, débogage seulement
 end
 
 -- minuteries en mémoire seulement (pas dans la sauvegarde)
@@ -506,6 +508,17 @@ local function handleDebug(s, name, param)
 		s.debug.fastQuarter = true
 		trace(s, "TÉMOIN début : " .. WITNESS_QUARTERS .. " trimestres accélérés, un toutes les " ..
 			WITNESS_QUARTER_SECONDS .. " s de jeu (la date du mod avance de 10 ans sur celle du jeu)")
+	-- étape 0 de la v10 : sondes de l'API (adapters/probes.lua)
+	elseif name == "probeSpawn" then
+		probes.spawn(function(line) trace(s, line) end)
+	elseif name == "probeUltimatum" then
+		probes.ultimatum(s, function(line) trace(s, line) end, param.industryId)
+	elseif name == "probeCounters" then
+		probes.watchCounters(s, function(line) trace(s, line) end, param.industryId)
+	elseif name == "probeTown" then
+		probes.growTown(s, function(line) trace(s, line) end)
+	elseif name == "probeCalendar" then
+		probes.calendar(function(line) trace(s, line) end)
 	elseif name == "toggleNotifications" then
 		s.debug.allNotifications = s.debug.allNotifications == false
 		trace(s, "notifications : " .. (s.debug.allNotifications and "chaque phase" or "annonce et reprise seulement"))
@@ -538,6 +551,11 @@ local script = {
 			changed = true
 		end
 
+		-- étape 0 de la v10 : résultats des sondes et suivi (fermeture, compteurs, ville)
+		local function probeTrace(line) trace(s, line) end
+		if probes.drain(s, probeTrace) then changed = true end
+		if probes.watch(s, probeTrace, false) then changed = true end
+
 		if selftest ~= nil then
 			changed = stepSelfTest(s) or changed
 		end
@@ -564,6 +582,7 @@ local script = {
 						say("trimestre " .. world.year .. "-T" .. (math.floor((world.month - 1) / 3) + 1) ..
 							" : " .. #s.events .. " événement(s), " .. #result.notifications .. " notification(s)")
 						stepWitness(s, result.processed)
+						probes.watch(s, function(line) trace(s, line) end, true)
 					end
 				else
 					-- trimestre marqué traité pour ne pas reboucler sur la même erreur à chaque pas

@@ -24,12 +24,13 @@ return function(test, check, eq)
 		local m = Mock.new()
 		m.update(0.5)
 		local expected = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
-			"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications" }
+			"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications",
+			"probeSpawn", "probeUltimatum", "probeCounters", "probeTown", "probeCalendar" }
 		eq(#m.state.subs, #expected, "nombre d'abonnements")
 		for i, name in ipairs(expected) do eq(m.state.subs[i], name, "abonnement " .. i) end
 		local s = m.state:get()
 		eq(s.version, 1, "version")
-		eq(s.subscriptions, 4, "version des abonnements")
+		eq(s.subscriptions, 5, "version des abonnements")
 		eq(s.lastQuarter, m.quarterIndex(), "trimestre initial")
 		check(m.hasLog("[chronicles] état initial créé"), "log de l'état initial absent")
 		m.update(0.5)
@@ -53,15 +54,15 @@ return function(test, check, eq)
 			m.update(0.5)
 			local label = "sauvegarde v" .. tostring(cas[1] or 1)
 			-- anciens abonnements vidés d'abord : un doublon ferait traiter chaque clic deux fois
-			eq(#m.state.subs, 10, label .. " : tous les noms réabonnés, sans doublon")
+			eq(#m.state.subs, 15, label .. " : tous les noms réabonnés, sans doublon")
 			local seen = {}
 			for _, name in ipairs(m.state.subs) do seen[name] = true end
 			for _, name in ipairs({ "prepareSaveTest", "checkSaveTest", "runWitness" }) do
 				check(seen[name], label .. " : abonnement manquant : " .. name)
 			end
-			eq(m.state:get().subscriptions, 4, label .. " : version des abonnements")
+			eq(m.state:get().subscriptions, 5, label .. " : version des abonnements")
 			m.update(0.5)
-			eq(#m.state.subs, 10, label .. " : pas de nouvel abonnement au deuxième update")
+			eq(#m.state.subs, 15, label .. " : pas de nouvel abonnement au deuxième update")
 			eq(#m.errorLogs(), 0, "erreurs journalisées")
 		end
 	end)
@@ -490,5 +491,52 @@ return function(test, check, eq)
 			check(s == math.floor(s) and s >= 1 and s < 2147483647, "état invalide : " .. tostring(s))
 			check(s * 48271 < 2 ^ 53, "produit inexact en double")
 		end
+	end)
+
+	-- étape 0 de la v10 : les sondes s'exécutent sans erreur ; l'API qu'elles visent est simulée ici au plus simple,
+	-- ce sont les essais en jeu qui disent si elle se comporte comme la recherche l'a lu
+	test("Script : sondes de l'étape 0 sans erreur", function()
+		local m = boot()
+		local api = m.api
+		local town = Mock.townIds and Mock.townIds[1] or nil
+		local newIndustry = Mock.industryIds[2]
+		api.engine.getRevision = function() return { num = { 7, 0, 0 } } end
+		api.engine.system = { stationSystem = { getStations = function(t) return t == town and { 1, 2 } or {} end } }
+		api.engine.util.proposal = { makeIndustrySpawnProposal = function(tag) return { tag = tag } end }
+		api.engine.util.logbook = { getLogValueMostRecent = function() return 42 end }
+		api.engine.util.getDefaultDayDuration = nil
+		api.util = {
+			getDefaultYearDuration = function() return 730500 end,
+			getYearDuration = function(mpd) return math.floor(730500 * mpd / 2000) end,
+			getDefaultDayDuration = function() return 2000 end,
+		}
+		api.type.ComponentType.GAME_SPEED, api.type.ComponentType.LOG_BOOK = "GAME_SPEED", "LOG_BOOK"
+		api.cmd.makeWorldBuildProposalCmd = function(p) return { kind = "build", proposal = p } end
+		api.cmd.makeIndustrySetManualDevelopmentCmd = function(e, v) return { kind = "manual", entity = e, value = v } end
+		api.cmd.makeIndustrySetDespawnTimeCmd = function(e, t) return { kind = "despawn", entity = e, at = t } end
+		-- le rappel de la construction arrive comme dans le jeu : avec les entités créées
+		local send = api.cmd.sendCommand
+		api.cmd.sendCommand = function(cmd, callback)
+			send(cmd)
+			if cmd.kind == "build" and callback then callback(nil, true, { { newIndustry } }) end
+		end
+		local function activity()
+			return table.concat(m.state:get().activity or {}, "\n")
+		end
+		m.handle("probeCalendar")
+		m.handle("probeSpawn")
+		m.update(0.5) -- recopie du résultat de la construction
+		check(activity():find("ESSAI création : réussite true", 1, true), "résultat de création absent :\n" .. activity())
+		eq(m.state:get().debug.probe.industry, newIndustry, "industrie créée retenue")
+		m.handle("probeUltimatum")
+		m.update(0.5)
+		check(activity():find("ESSAI fermeture : horodatage relu", 1, true), "relecture de l'horodatage absente")
+		m.handle("probeCounters", { industryId = newIndustry })
+		m.handle("probeTown")
+		m.advanceQuarter()
+		m.update(1)
+		check(activity():find("ESSAI ville : ", 1, true), "relevé de la ville absent")
+		check(activity():find("ESSAI calendrier : ", 1, true), "relevé du calendrier absent")
+		eq(#m.errorLogs(), 0, "erreurs journalisées")
 	end)
 end

@@ -245,6 +245,17 @@ dans le Journal, une notification à chaque phase. Conception : `notes/feedback-
   « Activité du moteur ».
 - Tests N1 : 41 verts, dont « Script : feedback de partie ».
 
+## 2026-10-31 — v9 en vrai : rien ressenti ; v10 planifiée ; étape 0 déployée
+
+- Partie témoin réelle de Philippe (19 ans, v9) : 9 crises complètes, aucune erreur, mais rien ressenti.
+  Diagnostic et décisions : `notes/v10-design.md` (phase 1 étendue, grèves et crises par famille,
+  booms près du réseau avec nouvelles industries de la chaîne, calendrier figé = pause).
+- Recherches d'API (2 sous-agents Sonnet) : `notes/tf3-api-industries.md`, `notes/tf3-api-economie.md`.
+  Découverte : `getCalendarDate` saute quand on change la vitesse du calendrier ; la v10 comptera ses trimestres.
+- Étape 0 (révision 10) : `adapters/probes.lua` + section « Essais v10 » de l'onglet Débogage + bouton
+  « Essai : suivre les compteurs » de la fenêtre d'industrie. Procédure : `notes/procedure-essai.md` §7.
+  Test N1 de fumée des sondes (API simulée) ; 42 tests verts.
+
 **Restent pour clore la phase 1** (voir la procédure) : retirer le mod (Tout rétablir, sauvegarder, désactiver, recharger sans le
 mod), industrie rasée en pleine crise, fermeture décidée par le jeu, industrie du joueur en jeu (il faut une
 partie où tu possèdes une industrie), partie témoin de 10 ans avec au moins deux crises complètes.

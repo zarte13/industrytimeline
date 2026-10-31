@@ -227,6 +227,16 @@ local DebugTab = react.RegisterRecipe("ChroniclesDebugTab", function() : TreeNod
 			debugButton("Préparer le test de sauvegarde", "Lance une crise si besoin et note l'empreinte de l'état", function() sendToScript("prepareSaveTest", {}) end),
 			debugButton("Vérifier la sauvegarde", "Après rechargement : même empreinte, aucune commande appliquée deux fois", function() sendToScript("checkSaveTest", {}) end),
 		}, "chronicles-row"),
+		-- étape 0 de la v10 : sondes de l'API (notes/v10-design.md), résultats dans « Activité du moteur »
+		text("Essais v10 (étape 0)", "font-scale-headline"),
+		hbox({
+			debugButton("Créer une industrie", "Près de la ville qui a le plus de gares", function() sendToScript("probeSpawn", {}) end),
+			debugButton("Ultimatum 1 trimestre", "Sur l'industrie créée : développement manuel, puis fermeture", function() sendToScript("probeUltimatum", {}) end),
+		}, "chronicles-row"),
+		hbox({
+			debugButton("Faire grandir une ville", "Un niveau d'expérience à la ville qui a le plus de gares", function() sendToScript("probeTown", {}) end),
+			debugButton("Lire le calendrier", "Vitesse, durée d'un trimestre, date", function() sendToScript("probeCalendar", {}) end),
+		}, "chronicles-row"),
 		text("Activité du moteur", "font-scale-headline"),
 		vbox(activityRows),
 	}, "chronicles-tab")
@@ -470,6 +480,11 @@ local ChroniclesIndustryPlugin = react.RegisterPluginRecipe(industry_eow.Industr
 				meta = { class = "secondary", tooltip = "Débogage : lance une crise sectorielle sur cette industrie" },
 				onClick = function() sendToScript("forceEvent", { industryId = entity }) end,
 				content = text("Forcer une crise ici"),
+			},
+			builtin.Button{
+				meta = { class = "secondary", tooltip = "Essai v10 : relève les compteurs de cargo de cette industrie à chaque trimestre" },
+				onClick = function() sendToScript("probeCounters", { industryId = entity }) end,
+				content = text("Essai : suivre les compteurs"),
 			},
 			builtin.Button{
 				meta = { class = "primary" },

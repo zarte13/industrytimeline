@@ -53,6 +53,23 @@ Jouer normalement, mod actif, sur une partie neuve ou de test. Ce qu'on voit pen
 À la fin : dire « lis-le ». Claude compte les crises et les erreurs dans `stdout.txt`, et on juge ensemble
 le rythme (trop de crises, pas assez, trop longues).
 
+## 7. Étape 0 de la v10 (15 minutes, partie de test avec quelques lignes)
+
+Onglet Débogage, section « Essais v10 (étape 0) ». Tout s'écrit dans « Activité du moteur » (lignes `ESSAI …`).
+
+1. **Lire le calendrier** : note la vitesse et la durée d'un trimestre. Change le curseur « Vitesse du
+   calendrier » (ex. 2x puis 0,5x), clique à nouveau : la durée doit changer.
+2. **Créer une industrie** : une industrie apparaît près de la ville qui a le plus de gares. Une notification
+   « industrie fondée » s'affiche ; clique dessus pour la voir. Capture si elle est mal placée.
+3. **Ultimatum 1 trimestre** : sur l'industrie créée. Une notification « fermeture » avec compte à rebours
+   doit s'afficher (capture). Laisse passer un peu plus d'un trimestre : l'activité dira si le jeu l'a
+   supprimée, ou si elle est toujours là.
+4. Ouvre la fenêtre d'une industrie **que tu dessers**, clique « Essai : suivre les compteurs ».
+   Laisse passer deux trimestres : les compteurs `itemsLoaded` doivent augmenter.
+5. **Faire grandir une ville** : relevé avant, puis après au trimestre suivant. Regarde aussi la ville en jeu.
+
+Puis « lis-le ».
+
 ## Hors de portée d'un essai rapide
 
 - Industrie du joueur en jeu : il faut une partie où l'on possède une industrie (le cas passe hors jeu).
