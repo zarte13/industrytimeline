@@ -60,15 +60,17 @@ Planifiée avec Philippe le 2026-10-31, après sa partie témoin de 19 ans en v9
 
 1. Le conteur choisit une industrie **près du réseau** (zone touchée par les lignes du joueur) qu'il **ne dessert
    pas encore** (aucun cargo transporté sur les 4 derniers trimestres) ; boom court ou long au hasard.
-   « Près du réseau » : même zone qu'une gare desservie par une ligne du joueur (à régler : distance à la gare la
-   plus proche, ou zone de plusieurs villes). Notification : « Boom du pétrole près d'Harbin : la plateforme cherche
-   un transporteur ».
+   « Près du réseau » (tranché le 2026-10-31) : **la même grande zone** (plusieurs villes) qu'au moins une gare
+   desservie par une ligne du joueur ; parfois une vraie nouvelle ligne à construire.
+   **Rumeur 2 trimestres avant** (« On parle d'un gisement près d'Harbin ») pour laisser préparer la ligne,
+   puis notification au début : « Boom du pétrole près d'Harbin : la plateforme cherche un transporteur ».
 2. **Nouvelles industries de la chaîne** autour : dès les premiers trimestres pour un boom court, plus étalées
    pour un boom long (cargos disponibles à l'époque seulement).
 3. **Contrat de boom** : livrer X % de la production de l'industrie en boom pendant N trimestres → prime,
    et le boom se prolonge.
 4. **Prime en argent** chaque trimestre dès que (et tant que) le joueur dessert l'industrie en boom.
-   Pas desservie : le boom s'essouffle plus vite (à régler), et ses nouvelles industries finissent par fermer.
+   Pas desservie (tranché le 2026-10-31) : le boom dure **sa durée pleine** quand même ; ne pas le desservir fait
+   seulement perdre la prime, le contrat et les nouvelles industries (qui finissent par fermer).
 5. **Villes proches** : croissance et besoins en hausse pendant le boom.
 6. Chaque nouvelle industrie : 2 ans de grâce ; non desservie à la fin du délai → ultimatum de fermeture
    d'1 an (compte à rebours du jeu) ; desservie entre-temps → ultimatum levé.
