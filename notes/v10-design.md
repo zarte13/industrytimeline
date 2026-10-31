@@ -18,7 +18,7 @@ Planifiée avec Philippe le 2026-10-31, après sa partie témoin de 19 ans en v9
 | Place dans le plan | **Phase 1 étendue** : le MVP n'est fini que quand il se ressent |
 | Crises | touchent **plusieurs industries à la fois** (toute une famille sur une zone) |
 | Grèves | une famille (« toutes les mines ») sur **une grande zone** de plusieurs villes |
-| Booms : cible | des industries sur **des lignes existantes** du joueur |
+| Booms : cible | **près du réseau** du joueur : dans une zone que ses lignes touchent déjà, sur des industries qu'il **ne dessert pas encore** (il faut prolonger une ligne pour en profiter). Corrigé le 2026-10-31 : « sur des lignes existantes » n'avait pas de sens, un boom sur une industrie déjà desservie ne pousse à rien construire |
 | Booms : durée | **selon l'intensité** : court et violent ou long et modéré, tiré au hasard |
 | Booms : nouvelles industries | **la chaîne** (boom pétrolier : puits, puis raffinerie qui en a besoin) ; apparaissent **vite** |
 | Booms : incitations | **villes qui grandissent**, **contrat de boom** (prime + prolongation), **prime en argent** |
@@ -47,7 +47,7 @@ Planifiée avec Philippe le 2026-10-31, après sa partie témoin de 19 ans en v9
 |---|---|---|---|
 | **Grève** | une famille, une grande zone | 10 à 20 % de la productivité **de base** | 1 à 2 trimestres, rumeur 1 trimestre avant |
 | **Crise** | une famille, une grande zone | −50 à −70 % de la base, reprise progressive | 1 à 3 ans |
-| **Boom court** | une industrie desservie + sa chaîne autour | +100 %, nouvelles industries rapides | 2 à 3 ans |
+| **Boom court** | une industrie non desservie près du réseau + sa chaîne autour | +100 %, nouvelles industries rapides | 2 à 3 ans |
 | **Boom long** | idem | +40 %, nouvelles industries plus lentes | 6 à 10 ans |
 
 - **Zones** : la carte découpée en 4 à 6 grandes zones (groupes de villes voisines), au lieu de la ville la plus proche.
@@ -58,12 +58,17 @@ Planifiée avec Philippe le 2026-10-31, après sa partie témoin de 19 ans en v9
 
 ## Cycle d'un boom
 
-1. Le conteur choisit une industrie que le joueur dessert (cargo transporté) ; boom court ou long au hasard.
+1. Le conteur choisit une industrie **près du réseau** (zone touchée par les lignes du joueur) qu'il **ne dessert
+   pas encore** (aucun cargo transporté sur les 4 derniers trimestres) ; boom court ou long au hasard.
+   « Près du réseau » : même zone qu'une gare desservie par une ligne du joueur (à régler : distance à la gare la
+   plus proche, ou zone de plusieurs villes). Notification : « Boom du pétrole près d'Harbin : la plateforme cherche
+   un transporteur ».
 2. **Nouvelles industries de la chaîne** autour : dès les premiers trimestres pour un boom court, plus étalées
    pour un boom long (cargos disponibles à l'époque seulement).
 3. **Contrat de boom** : livrer X % de la production de l'industrie en boom pendant N trimestres → prime,
    et le boom se prolonge.
-4. **Prime en argent** chaque trimestre tant que l'industrie en boom est desservie.
+4. **Prime en argent** chaque trimestre dès que (et tant que) le joueur dessert l'industrie en boom.
+   Pas desservie : le boom s'essouffle plus vite (à régler), et ses nouvelles industries finissent par fermer.
 5. **Villes proches** : croissance et besoins en hausse pendant le boom.
 6. Chaque nouvelle industrie : 2 ans de grâce ; non desservie à la fin du délai → ultimatum de fermeture
    d'1 an (compte à rebours du jeu) ; desservie entre-temps → ultimatum levé.
