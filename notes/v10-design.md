@@ -84,7 +84,37 @@ Planifiée avec Philippe le 2026-10-31, après sa partie témoin de 19 ans en v9
   (durée d'un trimestre à la vitesse par défaut), ou événements désactivés.
 - Tests N1 : mêmes scénarios avec des trimestres de durées différentes.
 
-## Inconnues techniques (à lever avant le code)
+## Réponses de l'API (recherche du 2026-10-31)
+
+Détail dans `notes/tf3-api-industries.md` et `notes/tf3-api-economie.md`.
+
+| Besoin | Solution retenue |
+|---|---|
+| Créer une industrie de la chaîne | `makeIndustrySpawnProposal(type, villeOuNil)` puis `makeWorldBuildProposalCmd` ; le moteur place (terre ou eau) ; `nil` = échec, réessayer |
+| Types possibles | ceux du **climat** de la carte (pas d'époque pour les industries) ; respecter `requiredIndustryTags` |
+| Ultimatum puis fermeture | `makeIndustrySetManualDevelopmentCmd(ind, true)` sur nos industries (sinon le jeu annule l'ultimatum pendant 5 ans), puis `makeIndustrySetDespawnTimeCmd(ind, maintenant + 1 an)` ; suppression par le mod si le jeu ne la fait pas (à vérifier) ; notification `industry_close` du jeu envoyée par le mod |
+| Desservie | différence par trimestre des compteurs `itemsLoaded` (enlevé) et `itemsUnloaded` (livré) du `LOG_BOOK` |
+| Lignes du joueur près d'une industrie | arrêts des lignes → gares → `getStationCatchables` |
+| Prime | `makeJournalBookAssetCmd` type `SUBSIDY` (ligne « Subventions » des finances) |
+| Villes qui grandissent | événement du jeu `("Towns", "addExperiencePercentage", { townEntity, amount, source = "subvention" })` |
+| Durée d'un trimestre | `api.util.getYearDuration(millisPerDay) / 4` ; curseur : 0 ; 0,25 ; 0,5 ; 1 ; 2 ; 4 |
+
+### Changement important : le cadencement
+
+`getCalendarDate` recalcule toutes les dates **à la vitesse actuelle** : changer la vitesse du calendrier
+fait sauter la date courante, en avant ou en arrière. La v9 cadence ses trimestres dessus, ce qui pose trois problèmes :
+- un saut en avant fait rattraper des trimestres d'un coup ;
+- un saut en arrière bloque le mod jusqu'à ce que la date repasse, avec en prime une lecture de la carte
+  à chaque pas, coûteuse ;
+- à 0x (calendrier figé), plus rien n'avance.
+
+v10 : le mod **compte ses propres trimestres** en accumulant le temps de jeu (`dt`) rapporté à la durée
+d'un trimestre à la vitesse courante (`getYearDuration(millisPerDay) / 4`). La date affichée (année, T1-T4)
+reste celle du calendrier, mais seulement pour les textes.
+
+Calendrier figé (0x) : choix ouvert (voir la fin du document).
+
+## Inconnues techniques (levées le 2026-10-31, voir ci-dessus ; liste d'origine)
 
 1. Créer une industrie par script : proposition de construction (`SimpleProposal`, `.con` du type) ;
    placement valide (collisions, terrain, eau pour les plateformes). Voir comment `industries.script.tl` du
@@ -99,6 +129,19 @@ Planifiée avec Philippe le 2026-10-31, après sa partie témoin de 19 ans en v9
    minimale, calendrier figé ?), et lecture de ce réglage par script.
 8. Pour plus tard (saisons, phase 3) : la fenêtre « Météo et heure » a un cycle météo « Dynamique » ;
    voir si un script peut lire ou régler la météo.
+
+## Restent à vérifier en jeu (étape 0 de la v10)
+
+1. `makeIndustrySpawnProposal` : l'industrie apparaît, entité renvoyée (industrie ou construction), collisions.
+2. Une industrie `manualDevelopment` avec horodatage dépassé est-elle supprimée par le jeu, ou faut-il la supprimer ?
+3. Cadence des compteurs `itemsLoaded` / `itemsUnloaded` (s'incrémentent-ils à chaque chargement ?).
+4. La notification `industry_close` envoyée par le mod affiche-t-elle le compte à rebours ?
+5. `addExperiencePercentage` fait-il visiblement grandir la ville ?
+
+## Choix ouverts
+
+- **Calendrier figé (0x)** : les événements s'arrêtent (rien ne se passe tant que le calendrier est figé),
+  ou ils continuent sur le temps de jeu, avec la durée d'un trimestre à la vitesse par défaut.
 
 ## Feedback (gardé de la v9)
 
