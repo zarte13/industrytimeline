@@ -67,6 +67,7 @@ Onglet Débogage, section « Essais v10 (étape 0) ». Tout s'écrit dans « Act
 4. Ouvre la fenêtre d'une industrie **que tu dessers**, clique « Essai : suivre les compteurs ».
    Laisse passer deux trimestres : les compteurs `itemsLoaded` doivent augmenter.
 5. **Faire grandir une ville** : relevé avant, puis après au trimestre suivant. Regarde aussi la ville en jeu.
+6. **Démolir l'industrie** (révision 11) : démolit l'industrie créée ; avec l'ultimatum, le mod la démolit seul à l'échéance.
 
 Puis « lis-le ».
 

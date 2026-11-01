@@ -120,6 +120,9 @@ function M.drain(s, trace)
 			else
 				trace("ESSAI création : aucune entité industrie trouvée dans le résultat")
 			end
+		elseif r.kind == "remove" then
+			trace("ESSAI démolition : " .. r.name .. " → réussite " .. tostring(r.success) ..
+				(r.segments > 0 and (", puis " .. r.segments .. " segment(s) de route retiré(s)") or ""))
 		end
 	end
 	return changed
@@ -142,6 +145,34 @@ function M.ultimatum(s, trace, industry)
 	trace("ESSAI fermeture : " .. name(industry) .. " en développement manuel, fermeture dans 1 trimestre (" ..
 		math.floor(q / 1000) .. " s de jeu" .. (frozen and ", calendrier figé : durée par défaut" or "") ..
 		") ; une notification « fermeture » est envoyée")
+end
+
+-- 2 bis. démolir : le jeu ne supprime pas une industrie en développement manuel (étape 0, 2026-10-31) ;
+-- même séquence que industry_util.removeIndustries du jeu (gui/main/industry_util.tl)
+function M.remove(s, trace, industry)
+	industry = industry or (s.debug.probe and s.debug.probe.industry)
+	if industry == nil or not api.engine.entityExists(industry) then
+		trace("ESSAI démolition : pas d'industrie")
+		return
+	end
+	local label = name(industry)
+	local construction = api.engine.system.streetConnectorSystem.getConstructionEntityForSubconstruction(industry)
+	if construction == nil or construction < 0 then
+		trace("ESSAI démolition : construction introuvable pour " .. label)
+		return
+	end
+	local segments = api.engine.util.construction.findSegmentsToDelete(construction) or {}
+	local context = api.type.Context.new()
+	local proposal = api.engine.util.proposal.createProposalRemove(construction, context)
+	trace("ESSAI démolition : " .. label .. " (construction #" .. construction .. ", " .. #segments .. " segment(s) de route)")
+	api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal, context, true, false, true),
+		function(_data, success)
+			M.pending[#M.pending + 1] = { kind = "remove", name = label, success = success, segments = #segments }
+			if success and #segments > 0 then
+				api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(
+					api.engine.util.proposal.makeSegmentsRemoveProposal(segments), nil, true, false, true))
+			end
+		end)
 end
 
 -- 3. compteurs du LOG_BOOK, sur l'industrie et sur son stockList
@@ -239,9 +270,10 @@ function M.watch(s, trace, newQuarter)
 				u.checked = true
 				changed = true
 			end
-			if now() > u.at + u.quarter then
-				trace("ESSAI fermeture : " .. u.name .. " toujours là 1 trimestre après l'échéance (horodatage " ..
-					tostring(ind.closureTimeStamp) .. ") : le mod devra la supprimer lui-même")
+			-- le jeu ne supprime pas une industrie en développement manuel : le mod la démolit à l'échéance
+			if now() > u.at then
+				trace("ESSAI fermeture : échéance passée, " .. u.name .. " toujours là : le mod la démolit")
+				M.remove(s, trace, u.industry)
 				p.ultimatum = nil
 				changed = true
 			end

@@ -137,6 +137,17 @@ Calendrier figé (0x) : choix ouvert (voir la fin du document).
 8. Pour plus tard (saisons, phase 3) : la fenêtre « Météo et heure » a un cycle météo « Dynamique » ;
    voir si un script peut lire ou régler la météo.
 
+## Résultats de l'étape 0 (essai de Philippe, 2026-10-31, révision 10)
+
+| Point | Résultat |
+|---|---|
+| 1. Créer une industrie | **OK** : « Baku Scierie n°1 » à Baku (ville la plus desservie, 18 gares). Le rappel renvoie 8 entités, ni industrie ni construction lisibles directement ; l'industrie se retrouve par `CONSTRUCTION.industries` |
+| 2. Fermeture d'une industrie en développement manuel | **Le jeu ne la supprime pas** : horodatage posé et conservé (pas remis à 0), industrie toujours là après l'échéance. **Le mod démolit lui-même** (séquence de `industry_util.removeIndustries`, sonde ajoutée en révision 11, à vérifier) |
+| 3. Compteurs de cargo | pas encore essayé |
+| 4. Notification `industry_close` envoyée par le mod | **OK**, texte du jeu ; le compte à rebours affiché se base sur la durée de fermeture du jeu (2 ans) et devient négatif après l'échéance → pour la v10, envoyer la notification avec un ultimatum proche de cette durée, ou en écrire une à nous |
+| 5. Ville qui grandit | pas encore essayé |
+| Calendrier | **jour par défaut = 4000 ms** (pas 2000), année par défaut 1 461 000 ms ; trimestre = 365 s de jeu à 1x, 730 s à 0,5x ; `millisPerDay` suit le curseur |
+
 ## Restent à vérifier en jeu (étape 0 de la v10)
 
 1. `makeIndustrySpawnProposal` : l'industrie apparaît, entité renvoyée (industrie ou construction), collisions.

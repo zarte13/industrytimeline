@@ -33,6 +33,11 @@ end
   (`GAME_TIME.gameTime + durée`), `0` = annule. Champ `INDUSTRY.closureTimeStamp`.
 - La suppression effective est faite par le script `Industries` du jeu (`industries.script.tl`, puis
   `gui/main/industry_util.tl` `removeIndustries`) quand l'horodatage est dépassé.
+  **Mesuré en jeu (étape 0, 2026-10-31)** : une industrie en `manualDevelopment` n'est **pas** supprimée à
+  l'échéance (horodatage conservé, industrie toujours là) : le mod la démolit lui-même
+  (`adapters/probes.lua`, `M.remove`, même séquence que `removeIndustries`).
+- Résultat de la création : le rappel renvoie plusieurs entités (8 lors de l'essai), aucune n'est l'industrie ;
+  la retrouver par `CONSTRUCTION.industries`.
 - **Piège** : toutes les 100 étapes, le script du jeu remet à 0 l'horodatage d'une industrie qui n'est pas
   candidate à la fermeture (utilisée depuis moins de 5 ans, ou construite depuis moins de 5 ans).
   Une industrie neuve créée par le mod verrait donc son ultimatum annulé pendant 5 ans.

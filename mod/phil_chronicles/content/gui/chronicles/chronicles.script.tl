@@ -231,7 +231,8 @@ local DebugTab = react.RegisterRecipe("ChroniclesDebugTab", function() : TreeNod
 		text("Essais v10 (étape 0)", "font-scale-headline"),
 		hbox({
 			debugButton("Créer une industrie", "Près de la ville qui a le plus de gares", function() sendToScript("probeSpawn", {}) end),
-			debugButton("Ultimatum 1 trimestre", "Sur l'industrie créée : développement manuel, puis fermeture", function() sendToScript("probeUltimatum", {}) end),
+			debugButton("Ultimatum 1 trimestre", "Sur l'industrie créée : développement manuel, fermeture, puis démolition par le mod", function() sendToScript("probeUltimatum", {}) end),
+			debugButton("Démolir l'industrie", "Démolit tout de suite l'industrie créée, comme le fait le jeu", function() sendToScript("probeRemove", {}) end),
 		}, "chronicles-row"),
 		hbox({
 			debugButton("Faire grandir une ville", "Un niveau d'expérience à la ville qui a le plus de gares", function() sendToScript("probeTown", {}) end),

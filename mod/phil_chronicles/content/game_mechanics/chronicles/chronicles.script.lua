@@ -6,9 +6,9 @@ local MOD = "phil_chronicles::/"
 local EVENT_ID = "PhilChronicles"
 local EVENT_NAMES = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
 	"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications",
-	"probeSpawn", "probeUltimatum", "probeCounters", "probeTown", "probeCalendar" }
+	"probeSpawn", "probeUltimatum", "probeCounters", "probeTown", "probeCalendar", "probeRemove" }
 -- à augmenter quand EVENT_NAMES change : les abonnements sont gardés dans la sauvegarde
-local SUBSCRIPTIONS_VERSION = 5
+local SUBSCRIPTIONS_VERSION = 6
 local ACTIVITY_MAX = 40 -- lignes gardées dans « Activité du moteur »
 local NOTIFICATION_TITLES = {
 	rumor = "Rumeur", announce = "Crise annoncée", trough = "Creux de la crise",
@@ -517,6 +517,8 @@ local function handleDebug(s, name, param)
 		probes.watchCounters(s, function(line) trace(s, line) end, param.industryId)
 	elseif name == "probeTown" then
 		probes.growTown(s, function(line) trace(s, line) end)
+	elseif name == "probeRemove" then
+		probes.remove(s, function(line) trace(s, line) end, param.industryId)
 	elseif name == "probeCalendar" then
 		probes.calendar(function(line) trace(s, line) end)
 	elseif name == "toggleNotifications" then

@@ -52,7 +52,7 @@ Ne jamais appeler `makeJournalClearAllCmd()` (efface tout le journal et les comp
 
 - Composant `GAME_SPEED` du monde : `speedup` (0 = simulation en pause) et `millisPerDay` (**0 = calendrier figé**).
 - Curseur « Vitesse du calendrier » : facteurs **0 ; 0,25 ; 0,5 ; 1 ; 2 ; 4**, avec
-  `facteur = getDefaultDayDuration() / millisPerDay` (jour par défaut ≈ 2000 ms de jeu, NON CONFIRMÉ : appeler l'API).
+  `facteur = getDefaultDayDuration() / millisPerDay` (**jour par défaut = 4000 ms** de jeu, mesuré en jeu le 2026-10-31 ; année 1 461 000 ms).
 - Durées en ms de jeu : `api.util.getYearDuration(millisPerDay)`, `getMonthDuration(…)`,
   `getDefault{Day,Month,Year}Duration()`. Un trimestre = année / 4.
 - **Piège** : `getCalendarDate(gameTime)` calcule la date « à la vitesse actuelle » : changer la vitesse décale

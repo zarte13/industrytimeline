@@ -25,12 +25,12 @@ return function(test, check, eq)
 		m.update(0.5)
 		local expected = { "forceEvent", "nextPhase", "fastQuarter", "dumpState", "resetAll", "runSelfTest",
 			"prepareSaveTest", "checkSaveTest", "runWitness", "toggleNotifications",
-			"probeSpawn", "probeUltimatum", "probeCounters", "probeTown", "probeCalendar" }
+			"probeSpawn", "probeUltimatum", "probeCounters", "probeTown", "probeCalendar", "probeRemove" }
 		eq(#m.state.subs, #expected, "nombre d'abonnements")
 		for i, name in ipairs(expected) do eq(m.state.subs[i], name, "abonnement " .. i) end
 		local s = m.state:get()
 		eq(s.version, 1, "version")
-		eq(s.subscriptions, 5, "version des abonnements")
+		eq(s.subscriptions, 6, "version des abonnements")
 		eq(s.lastQuarter, m.quarterIndex(), "trimestre initial")
 		check(m.hasLog("[chronicles] état initial créé"), "log de l'état initial absent")
 		m.update(0.5)
@@ -54,15 +54,15 @@ return function(test, check, eq)
 			m.update(0.5)
 			local label = "sauvegarde v" .. tostring(cas[1] or 1)
 			-- anciens abonnements vidés d'abord : un doublon ferait traiter chaque clic deux fois
-			eq(#m.state.subs, 15, label .. " : tous les noms réabonnés, sans doublon")
+			eq(#m.state.subs, 16, label .. " : tous les noms réabonnés, sans doublon")
 			local seen = {}
 			for _, name in ipairs(m.state.subs) do seen[name] = true end
 			for _, name in ipairs({ "prepareSaveTest", "checkSaveTest", "runWitness" }) do
 				check(seen[name], label .. " : abonnement manquant : " .. name)
 			end
-			eq(m.state:get().subscriptions, 5, label .. " : version des abonnements")
+			eq(m.state:get().subscriptions, 6, label .. " : version des abonnements")
 			m.update(0.5)
-			eq(#m.state.subs, 15, label .. " : pas de nouvel abonnement au deuxième update")
+			eq(#m.state.subs, 16, label .. " : pas de nouvel abonnement au deuxième update")
 			eq(#m.errorLogs(), 0, "erreurs journalisées")
 		end
 	end)
@@ -514,6 +514,12 @@ return function(test, check, eq)
 		api.cmd.makeWorldBuildProposalCmd = function(p) return { kind = "build", proposal = p } end
 		api.cmd.makeIndustrySetManualDevelopmentCmd = function(e, v) return { kind = "manual", entity = e, value = v } end
 		api.cmd.makeIndustrySetDespawnTimeCmd = function(e, t) return { kind = "despawn", entity = e, at = t } end
+		-- démolition (le jeu ne supprime pas une industrie en développement manuel : le mod le fait)
+		api.engine.system.streetConnectorSystem = { getConstructionEntityForSubconstruction = function(e) return e + 100 end }
+		api.engine.util.construction = { findSegmentsToDelete = function() return { 9001, 9002 } end }
+		api.engine.util.proposal.createProposalRemove = function(con) return { remove = con } end
+		api.engine.util.proposal.makeSegmentsRemoveProposal = function(segs) return { segments = segs } end
+		api.type.Context = { new = function() return {} end }
 		-- le rappel de la construction arrive comme dans le jeu : avec les entités créées
 		local send = api.cmd.sendCommand
 		api.cmd.sendCommand = function(cmd, callback)
@@ -537,6 +543,14 @@ return function(test, check, eq)
 		m.update(1)
 		check(activity():find("ESSAI ville : ", 1, true), "relevé de la ville absent")
 		check(activity():find("ESSAI calendrier : ", 1, true), "relevé du calendrier absent")
+		-- à l'échéance de l'ultimatum, le mod démolit l'industrie
+		m.gameTime = m.gameTime + 730500
+		m.update(0.5)
+		m.update(0.5)
+		check(activity():find("le mod la démolit", 1, true), "démolition à l'échéance absente :\n" .. activity())
+		check(activity():find("ESSAI démolition : .- → réussite true, puis 2 segment%(s%) de route"), "résultat de démolition absent")
+		eq(m.state:get().debug.probe.ultimatum, nil, "ultimatum terminé")
+		m.handle("probeRemove")
 		eq(#m.errorLogs(), 0, "erreurs journalisées")
 	end)
 end
